@@ -5,6 +5,7 @@
 # COMMAND ----------
 
 import os
+import sys
 import re
 import json
 import logging
@@ -16,8 +17,11 @@ from pyspark.sql.types import (
     StringType, IntegerType, LongType, DateType, TimestampType, DoubleType
 )
 
+# Make the clinical_inventory package importable from src/
+sys.path.insert(0, os.path.normpath(os.path.join(os.getcwd(), "../../")))
+
 # Import the DataCurator class and helpers
-from data_curator import (
+from clinical_inventory.curated.data_curator import (
     DataCurator,
     Constants,
     logger,
@@ -36,7 +40,7 @@ logging.basicConfig(level=logging.INFO)
 
 # COMMAND ----------
 
-def load_config(config_path: str = "config.json") -> dict:
+def load_config(config_path: str = "../../../config/curated.json") -> dict:
     """Load and validate configuration file."""
     try:
         with open(config_path) as f:

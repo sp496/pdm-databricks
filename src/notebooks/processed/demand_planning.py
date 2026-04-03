@@ -9,10 +9,13 @@
 import pandas as pd
 from datetime import datetime, timedelta
 import numpy as np
-import re, os
+import re, os, sys
 from pandas import json_normalize
-import demand_planning_processor as dp
 from delta.tables import DeltaTable
+
+# Make the clinical_inventory package importable from src/
+sys.path.insert(0, os.path.normpath(os.path.join(os.getcwd(), "../../")))
+from clinical_inventory.processed import demand_planning_processor as dp
 
 # COMMAND ----------
 

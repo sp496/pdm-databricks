@@ -1,10 +1,14 @@
 # Databricks notebook source
 import os
+import sys
 import json
 from datetime import datetime
 from pyspark.sql import functions as F, Window
 from pyspark.sql.types import DateType
-import decrypt_file as dc
+
+# Make the clinical_inventory package importable from src/
+sys.path.insert(0, os.path.normpath(os.path.join(os.getcwd(), "../../")))
+from clinical_inventory.raw import decrypt_file as dc
 
 # COMMAND ----------
 
@@ -13,7 +17,7 @@ print(f"Environment: {env}")
 
 # COMMAND ----------
 
-with open("config.json") as f:
+with open("../../../config/raw.json") as f:
     config = json.load(f)
 
 resolved_env = "prod" if env == "prd" else env

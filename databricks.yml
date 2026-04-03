@@ -1,0 +1,34 @@
+bundle:
+  name: clinical_inventory_optimization
+
+variables:
+  env:
+    description: Deployment environment (dev or prd)
+    default: dev
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      env: dev
+
+  prd:
+    mode: production
+    variables:
+      env: prd
+
+workspace:
+  # Update this to your Databricks workspace host
+  host: https://<your-workspace>.azuredatabricks.net
+
+resources:
+  jobs:
+    raw_job:
+      <<: *raw_job
+
+    curated_job:
+      <<: *curated_job
+
+    processed_job:
+      <<: *processed_job

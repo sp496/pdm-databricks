@@ -1,0 +1,36 @@
+new_cluster: &default_cluster
+  spark_version: 14.3.x-scala2.12
+  node_type_id: Standard_DS3_v2
+  num_workers: 2
+  spark_env_vars:
+    DATAENV: ${var.env}
+
+curated_job: &curated_job
+  name: clinical_inventory_curated_${var.env}
+  tags:
+    project: clinical_inventory_optimization
+    env: ${var.env}
+    stage: curated
+
+  tasks:
+    - task_key: curate_data
+      new_cluster:
+        <<: *default_cluster
+      notebook_task:
+        notebook_path: src/notebooks/curated/curate_data
+        base_parameters:
+          DATAENV: ${var.env}
+      libraries:
+        - whl: dist/clinical_inventory-*.whl
+
+    - task_key: load_metadata_tables
+      depends_on:
+        - task_key: curate_data
+      new_cluster:
+        <<: *default_cluster
+      notebook_task:
+        notebook_path: src/notebooks/curated/load_metadata_tables
+        base_parameters:
+          DATAENV: ${var.env}
+      libraries:
+        - whl: dist/clinical_inventory-*.whl
