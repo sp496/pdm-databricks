@@ -1,0 +1,14 @@
+{
+"legacy_raw_bkt" :"gilead-edp-pdm-{env}-us-west-2-pdm-gsc-bi",
+"legacy_raw_bkt_mount_point" : "/mnt/pdm-gsc-bi",
+"ss_header_mapping_file_path" : "clinical_inventory/landing/mapping/Subject Summary Header Mapping.xlsx",
+"treatment_group_mapping_file_path" : "clinical_inventory/landing/mapping/Dispensation Qtys - Supply Chain Study Dashboard.xlsx",
+
+"data_bkt" : "gilead-edp-pdm-{env}-us-west-2-pdm-gsc-bi",
+"data_bkt_mount_point" : "/mnt/pdm-gsc-bi",
+"raw_data_dir" : "clinical_inventory/raw",
+
+"historical_load": false,
+"start_date": null,
+"end_date": null
+}

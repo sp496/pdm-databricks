@@ -1,0 +1,12 @@
+{
+"src_bkt" : "gilead-edp-pdm-{env}-us-west-2-pdm-gsc-bi",
+"src_bkt_mount_point" : "/mnt/pdm-gsc-bi",
+"tgt_bkt" : "gilead-edp-pdm-{env}-us-west-2-pdm-gsc-bi",
+"tgt_bkt_mount_point" : "/mnt/pdm-gsc-bi",
+"src_data_dir" : "clinical_inventory/landing/irtfiles",
+"tgt_data_dir" : "clinical_inventory/raw",
+
+"historical_load": false,
+"start_date": null,
+"end_date": null
+}
