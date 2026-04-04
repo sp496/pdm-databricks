@@ -1,12 +1,20 @@
 {
-  "legacy_raw_bkt":            "$buckets.pdm_gsc_bi.name",
+  "legacy_raw_bkt": "$buckets.pdm_gsc_bi.name",
   "legacy_raw_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
-  "ss_header_mapping_file_path":       "clinical_inventory/landing/mapping/Subject Summary Header Mapping.xlsx",
+
+  "ss_header_mapping_file_path": "clinical_inventory/landing/mapping/Subject Summary Header Mapping.xlsx",
+  "d_header_mapping_file_path": "clinical_inventory/landing/mapping/Depot Inventory Header Mapping.xlsx",
+  "s_header_mapping_file_path": "clinical_inventory/landing/mapping/Site Inventory Header Mapping.xlsx",
+
   "treatment_group_mapping_file_path": "clinical_inventory/landing/mapping/Dispensation Qtys - Supply Chain Study Dashboard.xlsx",
 
-  "data_bkt":            "$buckets.pdm_gsc_bi.name",
+  "studylist_file_path": "clinical_inventory/landing/mapping/Inventory Optimization List of Studies and Reports.xlsx",
+
+  "data_bkt": "$buckets.pdm_gsc_bi.name",
   "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
-  "raw_data_dir":        "clinical_inventory/raw",
+
+  "ingested_data_dir": "clinical_inventory/landing/files",
+  "raw_data_dir": "clinical_inventory/raw",
 
   "historical_load": false,
   "start_date": null,

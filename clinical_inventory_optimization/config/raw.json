@@ -1,7 +1,5 @@
 {
-  "src_bkt":            "$buckets.legacy_raw.name",
   "src_bkt_mount_point": "$buckets.legacy_raw.mount",
-  "tgt_bkt":            "$buckets.pdm_gsc_bi.name",
   "tgt_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
   "src_data_dir":       "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/irtfiles",
   "tgt_data_dir":       "clinical_inventory/raw",
