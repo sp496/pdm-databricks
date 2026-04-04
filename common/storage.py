@@ -1,6 +1,10 @@
+import json
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_INFRA_CONFIG_PATH = Path(__file__).parent / "config" / "infrastructure.json"
 
 
 def ensure_mount(dbutils, mount_point: str, bucket_name: str) -> None:
@@ -16,6 +20,30 @@ def ensure_mount(dbutils, mount_point: str, bucket_name: str) -> None:
         logger.info(f"Mounted s3a://{bucket_name} at {mount_point}")
     else:
         logger.info(f"Mount already exists: {mount_point}")
+
+
+def mount_all(dbutils, env: str) -> None:
+    """Mount all S3 buckets defined in common/config/infrastructure.json.
+
+    Reads the shared infrastructure config, resolves the {env} placeholder in
+    each bucket name, and calls ensure_mount() for every bucket. Safe to call
+    multiple times — already-mounted buckets are skipped.
+
+    Intended to be called once at the start of the pipeline from a setup notebook,
+    so individual pipeline notebooks do not need to manage mounts themselves.
+
+    Args:
+        dbutils: Databricks dbutils object (passed from the calling notebook).
+        env: Environment name, e.g. "dev", "staging", "prd".
+    """
+    with open(_INFRA_CONFIG_PATH) as f:
+        infra = json.load(f)
+
+    for bucket_key, bucket_cfg in infra["buckets"].items():
+        bucket_name = bucket_cfg["name"].format(env=env)
+        mount_point = bucket_cfg["mount"]
+        ensure_mount(dbutils, mount_point, bucket_name)
+        logger.info(f"Bucket '{bucket_key}' ready at {mount_point}")
 
 
 def unmount(dbutils, mount_point: str) -> None:

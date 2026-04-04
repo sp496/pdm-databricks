@@ -18,30 +18,17 @@ with open("config.json") as f:
 
 resolved_env = "prod" if env == "prd" else env
 
-src_bkt = config["src_bkt"].format(env=env)
 src_bkt_mount_point = config["src_bkt_mount_point"].rstrip("/")
-tgt_bkt = config["tgt_bkt"].format(env=env)
 tgt_bkt_mount_point = config["tgt_bkt_mount_point"].rstrip("/")
 
-#decryption_key = config["decryption_key"]
 decryption_key = dbutils.secrets.get(scope = "clinical_inventory_rpa", key = "rpa_decryption_key")
 
 src_data_dir = config["src_data_dir"].format(env=resolved_env)
 tgt_data_dir = config["tgt_data_dir"]
 
-# New historical load controls
 historical_load = config.get("historical_load", False)
 start_date = config.get("start_date")
 end_date = config.get("end_date")
-
-# COMMAND ----------
-
-# Ensure mounts
-if not any(m.mountPoint == src_bkt_mount_point for m in dbutils.fs.mounts()):
-    dbutils.fs.mount(source=f"s3a://{src_bkt}", mount_point=src_bkt_mount_point)
-
-if not any(m.mountPoint == tgt_bkt_mount_point for m in dbutils.fs.mounts()):
-    dbutils.fs.mount(source=f"s3a://{tgt_bkt}", mount_point=tgt_bkt_mount_point)
 
 # COMMAND ----------
 
