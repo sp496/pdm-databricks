@@ -1,0 +1,12 @@
+{
+  "buckets": {
+    "legacy_raw": {
+      "name": "gilead-pdm-{env}-us-west-2-raw",
+      "mount": "/mnt/gilead-pdm-raw"
+    },
+    "pdm_gsc_bi": {
+      "name": "gilead-edp-pdm-{env}-us-west-2-pdm-gsc-bi",
+      "mount": "/mnt/pdm-gsc-bi"
+    }
+  }
+}

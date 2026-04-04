@@ -1,4 +1,4 @@
 {
-"s3_bucket" : "gilead-edp-pdm-{env}-us-west-2-pdm-gsc-bi",
-"mount_point" : "/mnt/pdm-gsc-bi"
+  "s3_bucket":   "$buckets.pdm_gsc_bi.name",
+  "mount_point": "$buckets.pdm_gsc_bi.mount"
 }
