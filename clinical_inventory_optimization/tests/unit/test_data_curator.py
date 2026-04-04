@@ -3,7 +3,7 @@ import sys
 import os
 import pandas as pd
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../lib"))
 
 from curated.data_curator import DataCurator, Constants
 
