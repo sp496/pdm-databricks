@@ -1,4 +1,14 @@
 # Databricks notebook source
+import sys
+import os
+
+current_dir  = os.getcwd()
+project_root = os.path.dirname(os.path.dirname(current_dir))  # clinical_inventory_optimization/
+repo_root    = os.path.dirname(project_root)                   # pdm-databricks/
+sys.path.extend([project_root, repo_root])
+
+# COMMAND ----------
+
 # MAGIC %load_ext autoreload
 # MAGIC %autoreload 2
 # MAGIC # Enables autoreload; learn more at https://docs.databricks.com/en/files/workspace-modules.html#autoreload-for-python-modules
@@ -9,9 +19,9 @@
 import pandas as pd
 from datetime import datetime, timedelta
 import numpy as np
-import re, os
+import re
 from pandas import json_normalize
-import demand_planning_processor as dp
+from lib.processed import demand_planning_processor as dp
 from delta.tables import DeltaTable
 
 # COMMAND ----------

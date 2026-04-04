@@ -1,12 +1,20 @@
 # Databricks notebook source
+import sys
+import os
+
+current_dir  = os.getcwd()
+project_root = os.path.dirname(os.path.dirname(current_dir))  # clinical_inventory_optimization/
+repo_root    = os.path.dirname(project_root)                   # pdm-databricks/
+sys.path.extend([project_root, repo_root])
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC #### Imports
 
 # COMMAND ----------
 
-import os
 import re
-import json
 import logging
 import pandas as pd
 from datetime import datetime
@@ -15,14 +23,8 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import (
     StringType, IntegerType, LongType, DateType, TimestampType, DoubleType
 )
-
-# Import the DataCurator class and helpers
-from data_curator import (
-    DataCurator,
-    Constants,
-    logger,
-    load_excel_mapping
-)
+from lib.curated.data_curator import DataCurator, Constants, logger, load_excel_mapping
+from common.config_loader import load_config
 
 # COMMAND ----------
 
@@ -36,32 +38,10 @@ logging.basicConfig(level=logging.INFO)
 
 # COMMAND ----------
 
-def load_config(config_path: str = "config.json") -> dict:
-    """Load and validate configuration file."""
-    try:
-        with open(config_path) as f:
-            config = json.load(f)
-
-        required_keys = ["legacy_raw_bkt", "data_bkt", "raw_data_dir"]
-        missing_keys = [key for key in required_keys if key not in config]
-        if missing_keys:
-            raise ValueError(f"Missing required config keys: {missing_keys}")
-
-        logger.info("Configuration loaded successfully")
-        return config
-
-    except FileNotFoundError:
-        logger.error(f"Configuration file not found: {config_path}")
-        raise
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in config file: {e}")
-        raise
-
-
 env = dbutils.widgets.get("DATAENV")
 logger.info(f"Environment: {env}")
 
-config = load_config()
+config = load_config(os.path.join(project_root, "config/curated.json"))
 
 resolved_env = "prod" if env == "prd" else env
 

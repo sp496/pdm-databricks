@@ -2,17 +2,18 @@
 import sys
 import os
 
-current_dir = os.getcwd()
-parent_dir = os.path.dirname(os.path.dirname(current_dir))
-sys.path.append(parent_dir)
+current_dir  = os.getcwd()
+project_root = os.path.dirname(os.path.dirname(current_dir))  # clinical_inventory_optimization/
+repo_root    = os.path.dirname(project_root)                   # pdm-databricks/
+sys.path.extend([project_root, repo_root])
 
 # COMMAND ----------
 
-import json
 from datetime import datetime
 from pyspark.sql import functions as F, Window
 from pyspark.sql.types import DateType
 from lib.raw import decrypt_file as dc
+from common.config_loader import load_config
 
 # COMMAND ----------
 
@@ -21,8 +22,7 @@ print(f"Environment: {env}")
 
 # COMMAND ----------
 
-with open(os.path.join(parent_dir, "config/raw.json")) as f:
-    config = json.load(f)
+config = load_config(os.path.join(project_root, "config/raw.json"))
 
 resolved_env = "prod" if env == "prd" else env
 
