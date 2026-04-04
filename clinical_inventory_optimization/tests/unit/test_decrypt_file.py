@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
 
-from clinical_inventory.raw.decrypt_file import AESDecryptor
+from raw.decrypt_file import AESDecryptor
 
 
 class TestAESDecryptor:

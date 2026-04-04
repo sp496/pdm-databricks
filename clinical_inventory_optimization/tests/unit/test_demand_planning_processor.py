@@ -5,7 +5,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
 
-from clinical_inventory.processed.demand_planning_processor import Config
+from processed.demand_planning_processor import Config
 
 
 class TestConfig:
