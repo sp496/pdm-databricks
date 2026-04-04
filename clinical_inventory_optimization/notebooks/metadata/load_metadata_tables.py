@@ -1,21 +1,30 @@
 # Databricks notebook source
+import sys
+import os
+
+current_dir  = os.getcwd()
+project_root = os.path.dirname(os.path.dirname(current_dir))  # clinical_inventory_optimization/
+repo_root    = os.path.dirname(project_root)                   # pdm-databricks/
+sys.path.extend([project_root, repo_root])
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC #### Imports
 
 # COMMAND ----------
 
-import os
 import re
-import json
 import logging
 import pandas as pd
 from datetime import datetime
 from typing import List, Tuple
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
-    StringType, IntegerType, LongType, DateType, TimestampType, DoubleType, StructType, StructField,BooleanType
+    StringType, IntegerType, LongType, DateType, TimestampType, DoubleType, StructType, StructField, BooleanType
 )
-from data_curator import Constants
+from lib.curated.data_curator import Constants
+from common.config_loader import load_config
 
 # COMMAND ----------
 
@@ -30,42 +39,16 @@ logging.basicConfig(level=logging.INFO)
 
 # COMMAND ----------
 
-def load_config(config_path: str = "config.json") -> dict:
-    """Load and validate configuration file."""
-    try:
-        with open(config_path) as f:
-            config = json.load(f)
-
-        required_keys = ["legacy_raw_bkt", "data_bkt", "raw_data_dir"]
-        missing_keys = [key for key in required_keys if key not in config]
-        if missing_keys:
-            raise ValueError(f"Missing required config keys: {missing_keys}")
-
-        logger.info("Configuration loaded successfully")
-        return config
-
-    except FileNotFoundError:
-        logger.error(f"Configuration file not found: {config_path}")
-        raise
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in config file: {e}")
-        raise
-
-
 env = dbutils.widgets.get("DATAENV")
 logger.info(f"Environment: {env}")
 
-config = load_config()
+config = load_config(os.path.join(project_root, "config/curated.json"))
 
 resolved_env = "prod" if env == "prd" else env
 
-legacy_raw_bkt = config["legacy_raw_bkt"].format(env=env)
 legacy_raw_bkt_mount_point = config["legacy_raw_bkt_mount_point"].rstrip("/")
 studylist_file_path = config["studylist_file_path"].format(env=resolved_env)
-
-data_bkt = config["data_bkt"].format(env=env)
 data_bkt_mount_point = config["data_bkt_mount_point"].rstrip("/")
-
 ingested_data_dir = config["ingested_data_dir"].format(env=resolved_env)
 raw_data_dir = config["raw_data_dir"]
 
@@ -74,27 +57,6 @@ start_date = config.get("start_date")
 end_date = config.get("end_date")
 
 # COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Mount S3 Buckets
-
-# COMMAND ----------
-
-# ========================================================================
-# Mount S3 Buckets
-# ========================================================================
-
-def ensure_mount(mount_point: str, bucket_name: str):
-    """Ensure S3 bucket is mounted."""
-    if not any(m.mountPoint == mount_point for m in dbutils.fs.mounts()):
-        dbutils.fs.mount(source=f"s3a://{bucket_name}", mount_point=mount_point)
-        logger.info(f"Mounted {bucket_name} at {mount_point}")
-    else:
-        logger.info(f"Mount already exists: {mount_point}")
-
-
-ensure_mount(legacy_raw_bkt_mount_point, legacy_raw_bkt)
-ensure_mount(data_bkt_mount_point, data_bkt)
 
 # COMMAND ----------
 
