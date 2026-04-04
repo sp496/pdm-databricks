@@ -2,7 +2,7 @@ import pytest
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../lib"))
 
 from raw.decrypt_file import AESDecryptor
 
