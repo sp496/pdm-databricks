@@ -5,7 +5,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
 
-from clinical_inventory.curated.data_curator import DataCurator, Constants
+from curated.data_curator import DataCurator, Constants
 
 
 class TestConstants:
