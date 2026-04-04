@@ -12,7 +12,11 @@
 # COMMAND ----------
 
 import sys
-sys.path.insert(0, "/Workspace/Repos/<your-repo-path>")  # adjust to your Databricks Repos path
+import os
+
+current_dir = os.getcwd()
+parent_dir = os.path.dirname(os.path.dirname(current_dir))
+sys.path.append(parent_dir)
 
 from common.storage import mount_all
 
@@ -25,3 +29,7 @@ print(f"Environment: {env}")
 
 mount_all(dbutils, env)
 print("All buckets mounted successfully.")
+
+# COMMAND ----------
+
+dbutils.fs.mounts()

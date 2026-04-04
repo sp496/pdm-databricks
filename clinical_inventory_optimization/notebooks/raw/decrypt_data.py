@@ -1,10 +1,18 @@
 # Databricks notebook source
+import sys
 import os
+
+current_dir = os.getcwd()
+parent_dir = os.path.dirname(os.path.dirname(current_dir))
+sys.path.append(parent_dir)
+
+# COMMAND ----------
+
 import json
 from datetime import datetime
 from pyspark.sql import functions as F, Window
 from pyspark.sql.types import DateType
-import decrypt_file as dc
+from lib.raw import decrypt_file as dc
 
 # COMMAND ----------
 
@@ -13,7 +21,7 @@ print(f"Environment: {env}")
 
 # COMMAND ----------
 
-with open("config.json") as f:
+with open(os.path.join(parent_dir, "config/raw.json")) as f:
     config = json.load(f)
 
 resolved_env = "prod" if env == "prd" else env
@@ -21,7 +29,7 @@ resolved_env = "prod" if env == "prd" else env
 src_bkt_mount_point = config["src_bkt_mount_point"].rstrip("/")
 tgt_bkt_mount_point = config["tgt_bkt_mount_point"].rstrip("/")
 
-decryption_key = dbutils.secrets.get(scope = "clinical_inventory_rpa", key = "rpa_decryption_key")
+decryption_key = dbutils.secrets.get(scope="clinical_inventory_rpa", key="rpa_decryption_key")
 
 src_data_dir = config["src_data_dir"].format(env=resolved_env)
 tgt_data_dir = config["tgt_data_dir"]
@@ -29,6 +37,7 @@ tgt_data_dir = config["tgt_data_dir"]
 historical_load = config.get("historical_load", False)
 start_date = config.get("start_date")
 end_date = config.get("end_date")
+
 
 # COMMAND ----------
 
@@ -45,6 +54,7 @@ def get_available_date_folders(base_path):
         except ValueError:
             continue
     return sorted(folders, key=lambda x: x[1])
+
 
 # COMMAND ----------
 
@@ -85,6 +95,7 @@ else:
 decryptor = dc.AESDecryptor(decryption_key, debug=False)
 src_base_mount = f"{src_bkt_mount_point}/{src_data_dir}".rstrip("/")
 
+
 def list_enc_files_one_level(base_path):
     """Return all .enc files directly under base_path and its immediate subfolders."""
     files = [
@@ -119,7 +130,8 @@ for folder in selected_folders:
     print(f"🔹 Decrypting {len(files)} files in {folder_path}...")
 
     for file in files:
-        rel_path = file[len(src_base_mount):].lstrip("/") if file.startswith(src_base_mount) else f"{folder}/{os.path.basename(file)}"
+        rel_path = file[len(src_base_mount):].lstrip("/") if file.startswith(
+            src_base_mount) else f"{folder}/{os.path.basename(file)}"
         out_mount = f"{tgt_bkt_mount_point}/{tgt_data_dir}/{rel_path}".replace(".enc", ".csv")
 
         dbutils.fs.mkdirs(os.path.dirname(out_mount))
@@ -128,4 +140,3 @@ for folder in selected_folders:
     print(f"✅ Completed folder: {folder}")
 
 print("🎉 Decryption process complete.")
- 
