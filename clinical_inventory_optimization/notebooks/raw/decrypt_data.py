@@ -26,10 +26,11 @@ config = load_config(os.path.join(project_root, "config/raw.json"))
 
 resolved_env = "prod" if env == "prd" else env
 
-src_bkt_mount_point = config["src_bkt_mount_point"].rstrip("/")
-tgt_bkt_mount_point = config["tgt_bkt_mount_point"].rstrip("/")
+src_bkt_mount_point = config["src_bkt_mount_point"]
+tgt_bkt_mount_point = config["tgt_bkt_mount_point"]
 
 decryption_key = dbutils.secrets.get(scope="clinical_inventory_rpa", key="rpa_decryption_key")
+decryption_key = "xpnCLyFMwCPEddWNQGoFEcavwPLEKoV6fELNgyh/dqo="
 
 src_data_dir = config["src_data_dir"].format(env=resolved_env)
 tgt_data_dir = config["tgt_data_dir"]

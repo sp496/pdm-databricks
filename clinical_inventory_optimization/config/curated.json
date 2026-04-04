@@ -1,6 +1,5 @@
 {
-  "legacy_raw_bkt": "$buckets.legacy_raw.name",
-  "legacy_raw_bkt_mount_point": "$buckets.legacy_raw.mount",
+  "mapping_bkt_mount_point": "$buckets.legacy_raw.mount",
 
   "ss_header_mapping_file_path": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/mapping/Subject Summary Header Mapping.xlsx",
   "d_header_mapping_file_path": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/mapping/Depot Inventory Header Mapping.xlsx",
@@ -8,12 +7,7 @@
 
   "treatment_group_mapping_file_path": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/mapping/Dispensation Qtys - Supply Chain Study Dashboard.xlsx",
 
-  "studylist_file_path": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/studylist/Inventory Optimization List of Studies and Reports.xlsx",
-
-  "data_bkt": "$buckets.pdm_gsc_bi.name",
   "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
-
-  "ingested_data_dir": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/irtfiles",
   "raw_data_dir": "clinical_inventory/raw",
 
   "historical_load": false,

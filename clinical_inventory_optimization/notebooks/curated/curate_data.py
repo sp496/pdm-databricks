@@ -45,7 +45,7 @@ config = load_config(os.path.join(project_root, "config/curated.json"))
 
 resolved_env = "prod" if env == "prd" else env
 
-legacy_raw_bkt_mount_point = config["legacy_raw_bkt_mount_point"].rstrip("/")
+mapping_bkt_mount_point = config["mapping_bkt_mount_point"]
 
 ss_header_mapping_file_path = config["ss_header_mapping_file_path"].format(env=resolved_env)
 d_header_mapping_file_path = config["d_header_mapping_file_path"].format(env=resolved_env)
@@ -53,7 +53,7 @@ s_header_mapping_file_path = config["s_header_mapping_file_path"].format(env=res
 
 treatment_group_mapping_file_path = config["treatment_group_mapping_file_path"].format(env=resolved_env)
 
-data_bkt_mount_point = config["data_bkt_mount_point"].rstrip("/")
+data_bkt_mount_point = config["data_bkt_mount_point"]
 
 raw_data_dir = config["raw_data_dir"]
 
@@ -133,13 +133,13 @@ def load_csv_files(file_list: List[Tuple[str, str]]) -> List[Tuple[pd.DataFrame,
 # COMMAND ----------
 
 # Load mapping file
-ss_header_mapping_file_path_full = f"/dbfs{os.path.join(legacy_raw_bkt_mount_point, ss_header_mapping_file_path)}"
+ss_header_mapping_file_path_full = f"/dbfs{os.path.join(mapping_bkt_mount_point, ss_header_mapping_file_path)}"
 ss_header_mapping_df = load_excel_mapping(ss_header_mapping_file_path_full)
 
-d_header_mapping_file_path_full = f"/dbfs{os.path.join(legacy_raw_bkt_mount_point, d_header_mapping_file_path)}"
+d_header_mapping_file_path_full = f"/dbfs{os.path.join(mapping_bkt_mount_point, d_header_mapping_file_path)}"
 d_header_mapping_df = load_excel_mapping(d_header_mapping_file_path_full)
 
-s_header_mapping_file_path_full = f"/dbfs{os.path.join(legacy_raw_bkt_mount_point, s_header_mapping_file_path)}"
+s_header_mapping_file_path_full = f"/dbfs{os.path.join(mapping_bkt_mount_point, s_header_mapping_file_path)}"
 s_header_mapping_df = load_excel_mapping(s_header_mapping_file_path_full)
 
 # Initialize DataCurator with mapping
@@ -773,7 +773,7 @@ for date_folder in selected_folders:
 
 # COMMAND ----------
 
-treatment_group_mapping_file_path = f"/dbfs{os.path.join(legacy_raw_bkt_mount_point, treatment_group_mapping_file_path)}"
+treatment_group_mapping_file_path = f"/dbfs{os.path.join(mapping_bkt_mount_point, treatment_group_mapping_file_path)}"
 tgm_df = pd.read_excel(treatment_group_mapping_file_path, sheet_name='Treatment Group Mapping', dtype='str', engine='openpyxl')
 
 # COMMAND ----------

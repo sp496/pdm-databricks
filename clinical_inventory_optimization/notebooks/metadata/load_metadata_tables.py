@@ -42,21 +42,17 @@ logging.basicConfig(level=logging.INFO)
 env = dbutils.widgets.get("DATAENV")
 logger.info(f"Environment: {env}")
 
-config = load_config(os.path.join(project_root, "config/curated.json"))
+config = load_config(os.path.join(project_root, "config/metadata.json"))
 
 resolved_env = "prod" if env == "prd" else env
 
-legacy_raw_bkt_mount_point = config["legacy_raw_bkt_mount_point"].rstrip("/")
+mapping_bkt_mount_point = config["mapping_bkt_mount_point"]
 studylist_file_path = config["studylist_file_path"].format(env=resolved_env)
-data_bkt_mount_point = config["data_bkt_mount_point"].rstrip("/")
 ingested_data_dir = config["ingested_data_dir"].format(env=resolved_env)
-raw_data_dir = config["raw_data_dir"]
 
 historical_load = config.get("historical_load", False)
 start_date = config.get("start_date")
 end_date = config.get("end_date")
-
-# COMMAND ----------
 
 # COMMAND ----------
 
@@ -80,7 +76,7 @@ def get_available_date_folders(base_path: str):
     return sorted(folders, key=lambda x: x[1])
 
 
-ingested_data_path = f"{legacy_raw_bkt_mount_point}/{ingested_data_dir}"
+ingested_data_path = f"{mapping_bkt_mount_point}/{ingested_data_dir}"
 folders = get_available_date_folders(ingested_data_path)
 
 if not folders:
@@ -117,7 +113,7 @@ else:
 
 # COMMAND ----------
 
-studylist_file_path = f"/dbfs{os.path.join(legacy_raw_bkt_mount_point, studylist_file_path)}"
+studylist_file_path = f"/dbfs{os.path.join(mapping_bkt_mount_point, studylist_file_path)}"
 studylist_df = pd.read_excel(studylist_file_path, dtype='str', engine='openpyxl')
 
 studylist_df = spark.createDataFrame(studylist_df)

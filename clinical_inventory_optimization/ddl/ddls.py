@@ -4,7 +4,7 @@ import json
 
 # COMMAND ----------
 
-env = os.environ.get('DATAENV')
+env = dbutils.widgets.get("DATAENV")
 print("Environment: ", env)
 
 # COMMAND ----------
@@ -320,9 +320,4 @@ CREATE TABLE `pdm-pdm-gsc-bi-{env}`.`clinical_inventory`.`clinical_demand_plan` 
     `processed_timestamp` TIMESTAMP
 )
 USING DELTA
-PARTITIONED BY (study_name)
-TBLPROPERTIES (
-    'delta.autoOptimize.optimizeWrite' = 'true',
-    'delta.autoOptimize.autoCompact'   = 'true'
-);
 """)
