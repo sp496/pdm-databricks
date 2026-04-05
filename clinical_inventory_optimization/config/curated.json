@@ -11,7 +11,7 @@
   "raw_data_dir": "clinical_inventory/raw",
 
   "historical_load": {
-    "enabled": true,
+    "enabled": false,
     "start_date": "20260210",
     "end_date": "20260210"
   }
