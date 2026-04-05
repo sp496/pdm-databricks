@@ -10,6 +10,9 @@
   "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
   "raw_data_dir": "clinical_inventory/raw",
 
-  "start_date": "20260210",
-  "end_date": "20260210"
+  "historical_load": {
+    "enabled": true,
+    "start_date": "20260210",
+    "end_date": "20260210"
+  }
 }

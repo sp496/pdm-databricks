@@ -50,9 +50,10 @@ mapping_bkt_mount_point = config["mapping_bkt_mount_point"]
 studylist_file_path = config["studylist_file_path"].format(env=resolved_env)
 ingested_data_dir = config["ingested_data_dir"].format(env=resolved_env)
 
-historical_load = config.get("historical_load", False)
-start_date = config.get("start_date")
-end_date = config.get("end_date")
+hist = config["historical_load"]
+historical_load = hist["enabled"]
+start_date = hist["start_date"]
+end_date = hist["end_date"]
 
 # COMMAND ----------
 

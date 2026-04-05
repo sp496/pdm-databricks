@@ -1,5 +1,7 @@
 {
-  "historical_load": false,
-  "start_date": null,
-  "end_date": null
+  "historical_load": {
+    "enabled": false,
+    "start_date": null,
+    "end_date": null
+  }
 }
