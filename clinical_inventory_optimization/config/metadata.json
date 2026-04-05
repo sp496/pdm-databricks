@@ -4,6 +4,9 @@
   "studylist_file_path": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/studylist/Inventory Optimization List of Studies and Reports.xlsx",
   "ingested_data_dir": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/irtfiles",
 
-  "start_date": "20260210",
-  "end_date": "20260210"
+  "historical_load": {
+    "enabled": true,
+    "start_date": "20260210",
+    "end_date": "20260210"
+  }
 }

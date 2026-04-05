@@ -35,9 +35,10 @@ decryption_key = "xpnCLyFMwCPEddWNQGoFEcavwPLEKoV6fELNgyh/dqo="
 src_data_dir = config["src_data_dir"].format(env=resolved_env)
 tgt_data_dir = config["tgt_data_dir"]
 
-historical_load = config.get("historical_load", False)
-start_date = config.get("start_date")
-end_date = config.get("end_date")
+hist = config["historical_load"]
+historical_load = hist["enabled"]
+start_date = hist["start_date"]
+end_date = hist["end_date"]
 
 
 # COMMAND ----------
