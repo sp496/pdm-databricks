@@ -2,11 +2,6 @@
   "mapping_bkt_mount_point": "$buckets.legacy_raw.mount",
 
   "studylist_file_path": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/studylist/Inventory Optimization List of Studies and Reports.xlsx",
-  "ingested_data_dir": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/irtfiles",
+  "ingested_data_dir": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/irtfiles"
 
-  "historical_load": {
-    "enabled": false,
-    "start_date": "20260210",
-    "end_date": "20260210"
-  }
 }

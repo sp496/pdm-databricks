@@ -10,6 +10,7 @@ Key Design:
 - Can be run locally by reading CSV files and passing DataFrames
 """
 
+import os
 import re
 import logging
 from datetime import datetime
@@ -521,7 +522,7 @@ def read_dynamic_csv(filepath: str, max_rows: int = 10) -> pd.DataFrame:
     raise ValueError(f"No fully populated header line found in {filepath}")
 
 
-def load_excel_mapping(excel_path: str, sheet_name: str = 'Header') -> pd.DataFrame:
+def load_excel_mapping(excel_path: str, sheet_name: str = 'Header') -> pd.DataFrame | None:
     """
     Load column mapping from an Excel file.
 
@@ -532,17 +533,21 @@ def load_excel_mapping(excel_path: str, sheet_name: str = 'Header') -> pd.DataFr
         sheet_name: Name of the sheet to read
 
     Returns:
-        DataFrame with mapping data where:
-        - First column 'Column Header' contains standardized column names
-        - Each subsequent column is a Study Protocol with original column names
-
-    Raises:
-        FileNotFoundError: If file doesn't exist
-        ValueError: If 'Column Header' column not found
+        DataFrame with mapping data or None if file does not exist
     """
     logger.info(f"Loading Excel mapping from: {excel_path}, sheet: {sheet_name}")
 
-    mapping_df = pd.read_excel(excel_path, sheet_name=sheet_name, engine='openpyxl', dtype=str)
+    # Check if file exists
+    if not os.path.exists(excel_path):
+        logger.warning(f"File not found: {excel_path}")
+        return None
+
+    mapping_df = pd.read_excel(
+        excel_path,
+        sheet_name=sheet_name,
+        engine='openpyxl',
+        dtype=str
+    )
 
     # Verify 'Column Header' column exists
     if 'Column Header' not in mapping_df.columns:
@@ -552,7 +557,7 @@ def load_excel_mapping(excel_path: str, sheet_name: str = 'Header') -> pd.DataFr
         )
 
     logger.info(f"Mapping loaded: {len(mapping_df)} rows, "
-               f"{len(mapping_df.columns)-1} study protocols")
+                f"{len(mapping_df.columns)-1} study protocols")
 
     return mapping_df
  

@@ -320,4 +320,9 @@ CREATE TABLE `pdm-pdm-gsc-bi-{env}`.`clinical_inventory`.`clinical_demand_plan` 
     `processed_timestamp` TIMESTAMP
 )
 USING DELTA
+PARTITIONED BY (study_name)
+TBLPROPERTIES (
+    'delta.autoOptimize.optimizeWrite' = 'true',
+    'delta.autoOptimize.autoCompact'   = 'true'
+);
 """)

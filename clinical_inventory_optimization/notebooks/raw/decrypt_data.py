@@ -3,8 +3,8 @@ import sys
 import os
 
 current_dir  = os.getcwd()
-project_root = os.path.dirname(os.path.dirname(current_dir))  # clinical_inventory_optimization/
-repo_root    = os.path.dirname(project_root)                   # pdm-databricks/
+project_root = os.path.dirname(os.path.dirname(current_dir))  # Code/Clinical_Inventory
+repo_root    = os.path.dirname(project_root)                   # Code
 sys.path.extend([project_root, repo_root])
 
 # COMMAND ----------
@@ -30,7 +30,6 @@ src_bkt_mount_point = config["src_bkt_mount_point"]
 tgt_bkt_mount_point = config["tgt_bkt_mount_point"]
 
 decryption_key = dbutils.secrets.get(scope="clinical_inventory_rpa", key="rpa_decryption_key")
-decryption_key = "xpnCLyFMwCPEddWNQGoFEcavwPLEKoV6fELNgyh/dqo="
 
 src_data_dir = config["src_data_dir"].format(env=resolved_env)
 tgt_data_dir = config["tgt_data_dir"]

@@ -3,8 +3,8 @@ import sys
 import os
 
 current_dir  = os.getcwd()
-project_root = os.path.dirname(os.path.dirname(current_dir))  # clinical_inventory_optimization/
-repo_root    = os.path.dirname(project_root)                   # pdm-databricks/
+project_root = os.path.dirname(os.path.dirname(current_dir))  # Code/Clinical_Inventory
+repo_root    = os.path.dirname(project_root)                   # Code
 sys.path.extend([project_root, repo_root])
 
 # COMMAND ----------

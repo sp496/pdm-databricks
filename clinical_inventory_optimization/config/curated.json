@@ -8,11 +8,6 @@
   "treatment_group_mapping_file_path": "pdm-gilead-dna/{env}/gilead/supplychain/clinical_inventory/mapping/Dispensation Qtys - Supply Chain Study Dashboard.xlsx",
 
   "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
-  "raw_data_dir": "clinical_inventory/raw",
+  "raw_data_dir": "clinical_inventory/raw"
 
-  "historical_load": {
-    "enabled": false,
-    "start_date": "20260210",
-    "end_date": "20260210"
-  }
 }
