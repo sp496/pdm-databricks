@@ -23,11 +23,12 @@ import os
 
 # ---------------------------------------------------------------------------
 # Path setup — makes `from lib.curated.data_curator import ...` work whether
-# you run from the repo root or from inside clinical_inventory_optimization/.
+# you run from the repo root or from inside tests/unit/.
 # ---------------------------------------------------------------------------
-_THIS_DIR      = os.path.dirname(os.path.abspath(__file__))   # .../clinical_inventory_optimization
-_REPO_ROOT     = os.path.dirname(_THIS_DIR)                   # .../pdm-databricks
-for _p in [_THIS_DIR, _REPO_ROOT]:
+_THIS_DIR     = os.path.dirname(os.path.abspath(__file__))        # .../tests/unit
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(_THIS_DIR))       # .../clinical_inventory_optimization
+_REPO_ROOT    = os.path.dirname(_PROJECT_ROOT)                    # .../pdm-databricks
+for _p in [_PROJECT_ROOT, _REPO_ROOT]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -35,8 +36,7 @@ for _p in [_THIS_DIR, _REPO_ROOT]:
 # Imports (no Databricks / pyspark required)
 # ---------------------------------------------------------------------------
 import logging
-import pandas as pd
-from lib.curated.data_curator import DataCurator, load_excel_mapping, read_dynamic_csv
+from lib.curated.data_curator import DataCurator, load_excel_mapping
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
