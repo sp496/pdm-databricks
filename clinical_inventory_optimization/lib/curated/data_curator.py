@@ -314,51 +314,39 @@ class DataCurator:
         """
 
 
-        df = df.copy()
-
         # Get column mapping
         column_mapping, column_value_overrides, standard_columns = self.create_column_mapping(study_protocol,
                                                                                               file_type)
 
-        # Skip standardization and renaming if no mappping found for the study
+        # Skip standardization if no mapping found for the study
         if not column_mapping:
             return df
 
-        # Rename columns based on mapping
-        columns_to_rename = {}
-        for col in df.columns:
-            col_stripped = col.strip()
-            if col_stripped in column_mapping:
-                standardized_name = column_mapping[col_stripped]
-                if col != standardized_name:
-                    columns_to_rename[col] = standardized_name
+        # Invert mapping: standardized_col -> original_col (stripped)
+        inverted_mapping = {std_col: orig_col for orig_col, std_col in column_mapping.items()}
 
-        # Drop columns that will become duplicates after rename
-        # (i.e., drop any column that already exists with the target name)
-        columns_to_drop = [col for col in df.columns
-                        if col in columns_to_rename.values() and col not in columns_to_rename.keys()]
+        # Map stripped df column names back to their actual (possibly whitespace-padded) names
+        df_cols_by_stripped = {col.strip(): col for col in df.columns}
 
-        if columns_to_drop:
-            logger.info(f"Dropping {len(columns_to_drop)} columns that would become duplicates: {columns_to_drop}")
-            df = df.drop(columns=columns_to_drop)
-
-        if columns_to_rename:
-            df = df.rename(columns=columns_to_rename)
-            logger.info(f"Renamed {len(columns_to_rename)} columns")
-
-        # Create standardized dataframe with all standard columns
+        # Build the standardized dataframe iteratively, one output column at a time
         df_standardized = pd.DataFrame(index=df.index)
 
-        # Add each standardized column
         for std_col in standard_columns:
-            if std_col in df.columns:
-                df_standardized[std_col] = df[std_col]
+            # 1. Source column mapped in via column_mapping
+            if std_col in inverted_mapping and inverted_mapping[std_col] in df_cols_by_stripped:
+                source_col = df_cols_by_stripped[inverted_mapping[std_col]]
+                df_standardized[std_col] = df[source_col]
+            # 2. Column already present in df with the standard name
+            elif std_col in df_cols_by_stripped:
+                df_standardized[std_col] = df[df_cols_by_stripped[std_col]]
+            # 3. Hard-coded value override
             elif std_col in column_value_overrides:
                 df_standardized[std_col] = column_value_overrides[std_col]
+            # 4. Not available anywhere
             else:
                 df_standardized[std_col] = None
 
-        logger.info(f"Standardized Subject Summary: {df_standardized.shape[0]} rows, "
+        logger.info(f"Standardized data: {df_standardized.shape[0]} rows, "
                    f"{df_standardized.shape[1]} columns")
 
         return df_standardized
