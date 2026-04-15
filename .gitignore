@@ -124,3 +124,6 @@ Desktop.ini
 # ---------------------------
 # Generated forecast output files
 demand_forecast.csv
+
+# Test outputs (generated locally, may contain real study data)
+clinical_inventory_optimization/tests/outputs/
