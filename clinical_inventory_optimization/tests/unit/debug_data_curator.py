@@ -54,9 +54,9 @@ _OUTPUTS_DIR    = os.path.join(_TESTS_DIR, "outputs")
 # Excel mapping files — place in tests/fixtures/ and update filenames below.
 # Set to None if you don't have the file locally; standardization will be skipped.
 LOCAL_MAPPING = {
-    "subject": os.path.join(_FIXTURES_DIR, "Subject Summary Header Mapping.xlsx"),
-    "depot":   os.path.join(_FIXTURES_DIR, "Depot Inventory Header Mapping.xlsx"),
-    "site":    os.path.join(_FIXTURES_DIR, "Site Inventory Header Mapping.xlsx"),
+    "subject": r"../fixtures/Subject Summary Header Mapping.xlsx",
+    "depot":   None,
+    "site":    None,
     "slsm":    None,   # no mapping file for supply-method files
     "clsm":    None,
 }
@@ -64,9 +64,9 @@ LOCAL_MAPPING = {
 # Sample CSV files — place in tests/fixtures/sample_csvs/ and update filenames below.
 # Set to None to skip that file type.
 LOCAL_CSV = {
-    "subject": os.path.join(_SAMPLE_CSV_DIR, "Gilead GS-US-592-6173_Subject Summary2025-11-10-08-19-19.csv"),
-    "depot":   os.path.join(_SAMPLE_CSV_DIR, "Gilead GS-US-592-6173_Depot Inventory2025-11-10-08-19-19.csv"),
-    "site":    os.path.join(_SAMPLE_CSV_DIR, "Gilead GS-US-592-6173_Site Inventory2025-11-10-08-19-19.csv"),
+    "subject": r"../fixtures/sample_csvs/Gilead GS-US-409-5704_Subject Summary (Unblinded)Subject Summary2026-04-14-18-57-28.csv",
+    "depot":   None,
+    "site":    None,
     "slsm":    None,
     "clsm":    None,
 }
