@@ -11,11 +11,10 @@ PyCharm Setup (one-time):
   3. Open this file and press the green Run/Debug button, or set a breakpoint
      anywhere in data_curator.py and press the Debug button.
 
-Configuring local paths:
-  Edit the LOCAL_PATHS section below to point at files on your machine.
-  Mapping Excel files and sample CSVs can be downloaded from the shared drive
-  or cloud bucket. The script will still run (skipping standardization) if
-  mapping files are absent.
+Local files:
+  Mapping Excel files  → tests/fixtures/
+  Sample CSV files     → tests/fixtures/sample_csvs/
+  Processed outputs    → tests/outputs/<file_type>/   (gitignored, created on first run)
 """
 
 import sys
@@ -26,7 +25,8 @@ import os
 # you run from the repo root or from inside tests/unit/.
 # ---------------------------------------------------------------------------
 _THIS_DIR     = os.path.dirname(os.path.abspath(__file__))        # .../tests/unit
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(_THIS_DIR))       # .../clinical_inventory_optimization
+_TESTS_DIR    = os.path.dirname(_THIS_DIR)                        # .../tests
+_PROJECT_ROOT = os.path.dirname(_TESTS_DIR)                       # .../clinical_inventory_optimization
 _REPO_ROOT    = os.path.dirname(_PROJECT_ROOT)                    # .../pdm-databricks
 for _p in [_PROJECT_ROOT, _REPO_ROOT]:
     if _p not in sys.path:
@@ -41,26 +41,32 @@ from lib.curated.data_curator import DataCurator, load_excel_mapping
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
 
+# Resolved directory paths
+_FIXTURES_DIR   = os.path.join(_TESTS_DIR, "fixtures")
+_SAMPLE_CSV_DIR = os.path.join(_FIXTURES_DIR, "sample_csvs")
+_OUTPUTS_DIR    = os.path.join(_TESTS_DIR, "outputs")
+
 
 # ===========================================================================
-# LOCAL PATHS — edit these to match your machine
+# LOCAL PATHS — update filenames to match the files you've placed in fixtures/
 # ===========================================================================
 
-# Excel mapping files (downloaded from cloud bucket)
+# Excel mapping files — place in tests/fixtures/ and update filenames below.
 # Set to None if you don't have the file locally; standardization will be skipped.
 LOCAL_MAPPING = {
-    "subject": r"/path/to/Subject Summary Header Mapping.xlsx",
-    "depot":   r"/path/to/Depot Inventory Header Mapping.xlsx",
-    "site":    r"/path/to/Site Inventory Header Mapping.xlsx",
+    "subject": os.path.join(_FIXTURES_DIR, "Subject Summary Header Mapping.xlsx"),
+    "depot":   os.path.join(_FIXTURES_DIR, "Depot Inventory Header Mapping.xlsx"),
+    "site":    os.path.join(_FIXTURES_DIR, "Site Inventory Header Mapping.xlsx"),
     "slsm":    None,   # no mapping file for supply-method files
     "clsm":    None,
 }
 
-# Sample CSV files to process (one per file type you want to test)
+# Sample CSV files — place in tests/fixtures/sample_csvs/ and update filenames below.
+# Set to None to skip that file type.
 LOCAL_CSV = {
-    "subject": r"/path/to/Gilead GS-US-592-6173_Subject Summary2025-11-10-08-19-19.csv",
-    "depot":   r"/path/to/Gilead GS-US-592-6173_Depot Inventory2025-11-10-08-19-19.csv",
-    "site":    r"/path/to/Gilead GS-US-592-6173_Site Inventory2025-11-10-08-19-19.csv",
+    "subject": os.path.join(_SAMPLE_CSV_DIR, "Gilead GS-US-592-6173_Subject Summary2025-11-10-08-19-19.csv"),
+    "depot":   os.path.join(_SAMPLE_CSV_DIR, "Gilead GS-US-592-6173_Depot Inventory2025-11-10-08-19-19.csv"),
+    "site":    os.path.join(_SAMPLE_CSV_DIR, "Gilead GS-US-592-6173_Site Inventory2025-11-10-08-19-19.csv"),
     "slsm":    None,
     "clsm":    None,
 }
@@ -197,6 +203,15 @@ def _load_mapping(file_type: str):
     return load_excel_mapping(path)
 
 
+def _write_output(result_df, file_type: str):
+    """Write processed DataFrame to tests/outputs/<file_type>/result_<DATE_FOLDER>.csv"""
+    out_dir = os.path.join(_OUTPUTS_DIR, file_type)
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f"result_{DATE_FOLDER}.csv")
+    result_df.to_csv(out_path, index=False)
+    logger.info(f"  Output written: {out_path}")
+
+
 # ===========================================================================
 # Main debug routine
 # ===========================================================================
@@ -258,6 +273,7 @@ def main():
             logger.info(f"  Columns: {list(result_df.columns)}")
             print(f"\n[{file_type}] First 3 rows:")
             print(result_df.head(3).to_string())
+            _write_output(result_df, file_type)
         else:
             logger.error(f"  Processing failed for {file_type}")
 
