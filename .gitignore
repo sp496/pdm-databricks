@@ -125,5 +125,7 @@ Desktop.ini
 # Generated forecast output files
 demand_forecast.csv
 
-# Test outputs (generated locally, may contain real study data)
+# Test fixtures and outputs (local data files, may contain real study data)
+clinical_inventory_optimization/tests/fixtures/*.xlsx
+clinical_inventory_optimization/tests/fixtures/sample_csvs/*.csv
 clinical_inventory_optimization/tests/outputs/
