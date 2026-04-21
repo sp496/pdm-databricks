@@ -321,9 +321,6 @@ class DataCurator:
         # Invert to: standardized_col -> raw_val (source column name or "ColName=literal")
         inverted_mapping = {std_col: raw_val for raw_val, std_col in column_mapping.items()}
 
-        # Map stripped df column names back to their actual (possibly whitespace-padded) names
-        df_cols_by_stripped = {col.strip(): col for col in df.columns}
-
         df_standardized = pd.DataFrame(index=df.index)
 
         for std_col in standard_columns:
@@ -331,10 +328,10 @@ class DataCurator:
             if raw_val is not None and '=' in raw_val:
                 _, value = raw_val.split('=', 1)
                 df_standardized[std_col] = value.strip()
-            elif raw_val is not None and raw_val in df_cols_by_stripped:
-                df_standardized[std_col] = df[df_cols_by_stripped[raw_val]]
-            elif std_col in df_cols_by_stripped:
-                df_standardized[std_col] = df[df_cols_by_stripped[std_col]]
+            elif raw_val is not None and raw_val in df.columns:
+                df_standardized[std_col] = df[raw_val]
+            elif std_col in df.columns:
+                df_standardized[std_col] = df[std_col]
             else:
                 df_standardized[std_col] = None
 
