@@ -318,12 +318,13 @@ class DataCurator:
         if not column_mapping:
             return df
 
-        # Split mapping entries into value overrides ("=literal") and source column lookups
+        # Split mapping entries into value overrides ("ColName=literal") and source column lookups
         value_overrides = {}
         source_mapping = {}
         for raw_val, std_col in column_mapping.items():
-            if raw_val.startswith('='):
-                value_overrides[std_col] = raw_val[1:].strip()
+            if '=' in raw_val:
+                _, value = raw_val.split('=', 1)
+                value_overrides[std_col] = value.strip()
             else:
                 source_mapping[raw_val] = std_col
 
