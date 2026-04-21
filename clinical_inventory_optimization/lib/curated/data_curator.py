@@ -328,6 +328,13 @@ class DataCurator:
             if raw_val is not None and '=' in raw_val:
                 _, value = raw_val.split('=', 1)
                 df_standardized[std_col] = value.strip()
+            elif raw_val is not None and ',' in raw_val:
+                source_cols = [c.strip() for c in raw_val.split(',')]
+                existing = [c for c in source_cols if c in df.columns]
+                if existing:
+                    df_standardized[std_col] = df[existing].bfill(axis=1).iloc[:, 0]
+                else:
+                    df_standardized[std_col] = None
             elif raw_val is not None and raw_val in df.columns:
                 df_standardized[std_col] = df[raw_val]
             elif std_col in df.columns:
