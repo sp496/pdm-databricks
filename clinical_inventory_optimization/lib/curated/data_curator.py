@@ -228,7 +228,7 @@ class DataCurator:
     # Column Mapping Methods
     # ========================================================================
 
-    def create_column_mapping(self, study_protocol: str, file_type: str) -> Optional[Tuple[Dict[str, str], Dict[str, str],  List[str]]]:
+    def create_column_mapping(self, study_protocol: str, file_type: str) -> Optional[Tuple[Dict[str, str], List[str]]]:
         """
         Create column mapping dictionary for a specific study protocol.
 
@@ -237,7 +237,10 @@ class DataCurator:
             file_type: One of 'subject', 'site', 'depot'
 
         Returns:
-            Dictionary mapping original column names to standardized names
+            Tuple of (column_mapping, standard_columns) where column_mapping maps raw cell
+            values from the mapping sheet to standardized column names. A cell value of the
+            form "=<literal>" denotes a hard-coded override and is passed through as-is;
+            standardize_data interprets these entries.
 
         Raises:
             ValueError: If mapping_df not set or study protocol not found
@@ -258,24 +261,18 @@ class DataCurator:
 
         elif study_protocol not in mapping_df.columns:
             logger.debug(f"No {file_type} column mapping for {study_protocol}")
-            return {}, {}, standard_columns
+            return {}, standard_columns
 
         column_mapping = {}
-        column_value_overrides = {}
 
         for _, row in mapping_df.iterrows():
             std_col = row['Column Header']
             orig_col = row[study_protocol]
             if pd.notna(orig_col) and orig_col.strip():
-                orig_col_stripped = orig_col.strip()
-                if '=' in orig_col_stripped:
-                    _, value = orig_col_stripped.split('=', 1)
-                    column_value_overrides[std_col] = value.strip()
-                else:
-                    column_mapping[orig_col_stripped] = std_col
+                column_mapping[orig_col.strip()] = std_col
 
         logger.debug(f"Created {file_type} column mapping with {len(column_mapping)} entries for {study_protocol}")
-        return column_mapping, column_value_overrides, standard_columns
+        return column_mapping, standard_columns
 
     # ========================================================================
     # Core Processing Methods (accept DataFrames)
@@ -315,15 +312,23 @@ class DataCurator:
 
 
         # Get column mapping
-        column_mapping, column_value_overrides, standard_columns = self.create_column_mapping(study_protocol,
-                                                                                              file_type)
+        column_mapping, standard_columns = self.create_column_mapping(study_protocol, file_type)
 
         # Skip standardization if no mapping found for the study
         if not column_mapping:
             return df
 
-        # Invert mapping: standardized_col -> original_col (stripped)
-        inverted_mapping = {std_col: orig_col for orig_col, std_col in column_mapping.items()}
+        # Split mapping entries into value overrides ("=literal") and source column lookups
+        value_overrides = {}
+        source_mapping = {}
+        for raw_val, std_col in column_mapping.items():
+            if raw_val.startswith('='):
+                value_overrides[std_col] = raw_val[1:].strip()
+            else:
+                source_mapping[raw_val] = std_col
+
+        # Invert source mapping: standardized_col -> original_col (stripped)
+        inverted_mapping = {std_col: orig_col for orig_col, std_col in source_mapping.items()}
 
         # Map stripped df column names back to their actual (possibly whitespace-padded) names
         df_cols_by_stripped = {col.strip(): col for col in df.columns}
@@ -340,8 +345,8 @@ class DataCurator:
             elif std_col in df_cols_by_stripped:
                 df_standardized[std_col] = df[df_cols_by_stripped[std_col]]
             # 3. Hard-coded value override
-            elif std_col in column_value_overrides:
-                df_standardized[std_col] = column_value_overrides[std_col]
+            elif std_col in value_overrides:
+                df_standardized[std_col] = value_overrides[std_col]
             # 4. Not available anywhere
             else:
                 df_standardized[std_col] = None
