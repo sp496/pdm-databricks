@@ -318,37 +318,23 @@ class DataCurator:
         if not column_mapping:
             return df
 
-        # Split mapping entries into value overrides ("ColName=literal") and source column lookups
-        value_overrides = {}
-        source_mapping = {}
-        for raw_val, std_col in column_mapping.items():
-            if '=' in raw_val:
-                _, value = raw_val.split('=', 1)
-                value_overrides[std_col] = value.strip()
-            else:
-                source_mapping[raw_val] = std_col
-
-        # Invert source mapping: standardized_col -> original_col (stripped)
-        inverted_mapping = {std_col: orig_col for orig_col, std_col in source_mapping.items()}
+        # Invert to: standardized_col -> raw_val (source column name or "ColName=literal")
+        inverted_mapping = {std_col: raw_val for raw_val, std_col in column_mapping.items()}
 
         # Map stripped df column names back to their actual (possibly whitespace-padded) names
         df_cols_by_stripped = {col.strip(): col for col in df.columns}
 
-        # Build the standardized dataframe iteratively, one output column at a time
         df_standardized = pd.DataFrame(index=df.index)
 
         for std_col in standard_columns:
-            # 1. Source column mapped in via column_mapping
-            if std_col in inverted_mapping and inverted_mapping[std_col] in df_cols_by_stripped:
-                source_col = df_cols_by_stripped[inverted_mapping[std_col]]
-                df_standardized[std_col] = df[source_col]
-            # 2. Column already present in df with the standard name
+            raw_val = inverted_mapping.get(std_col)
+            if raw_val is not None and '=' in raw_val:
+                _, value = raw_val.split('=', 1)
+                df_standardized[std_col] = value.strip()
+            elif raw_val is not None and raw_val in df_cols_by_stripped:
+                df_standardized[std_col] = df[df_cols_by_stripped[raw_val]]
             elif std_col in df_cols_by_stripped:
                 df_standardized[std_col] = df[df_cols_by_stripped[std_col]]
-            # 3. Hard-coded value override
-            elif std_col in value_overrides:
-                df_standardized[std_col] = value_overrides[std_col]
-            # 4. Not available anywhere
             else:
                 df_standardized[std_col] = None
 
