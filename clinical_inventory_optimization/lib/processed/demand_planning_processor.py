@@ -30,7 +30,7 @@ class CycleInfo:
 @dataclass
 class ProjectedVisit:
     """Represents a projected future visit"""
-    subject_number: int
+    subject_number: Optional[int]
     drug_dispensed: str
     cycle_number: int
     cycle_day: int
@@ -363,6 +363,9 @@ class VisitProjector:
             else:
                 max_cycles = None  # No cycle limit, only time limit applies
 
+            raw_subject = row.get('subject_number')
+            subject_number = int(raw_subject) if pd.notna(raw_subject) else None
+
             # Calculate Day 1 of the last recorded cycle (current cycle)
             time_to_subtract = timedelta(days=last_day_number - 1)
             last_cycle_day_1 = last_visit_date - time_to_subtract
@@ -399,7 +402,7 @@ class VisitProjector:
                     recorded_forecast_str = f"{prefix}Cycle {current_cycle_number} Day {day}"
 
                     projected_visit = ProjectedVisit(
-                        subject_number=int(row['subject_number']),
+                        subject_number=subject_number,
                         drug_dispensed=row['drug_dispensed'],
                         cycle_number=current_cycle_number,
                         cycle_day=day,
@@ -455,7 +458,7 @@ class VisitProjector:
                         recorded_forecast_str = f"{prefix}Cycle {current_projected_cycle} Day {day}"
 
                         projected_visit = ProjectedVisit(
-                            subject_number=int(row['subject_number']),
+                            subject_number=subject_number,
                             drug_dispensed=row['drug_dispensed'],
                             cycle_number=current_projected_cycle,
                             cycle_day=day,
