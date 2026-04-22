@@ -828,9 +828,11 @@ class DemandPlanningProcessor:
         other_cols = [col for col in df.columns if col not in id_cols + sum_cols]
 
         agg_dict = {col: 'first' for col in other_cols}
+        agg_dict['last_study_visit_date'] = 'max'
         agg_dict.update({col: 'sum' for col in sum_cols})
 
-        df_aggregated = df.groupby(id_cols, dropna=False).agg(agg_dict).reset_index()
+        df_sorted = df.sort_values('last_study_visit_date', ascending=False, na_position='last')
+        df_aggregated = df_sorted.groupby(id_cols, dropna=False).agg(agg_dict).reset_index()
 
         logger.info(f"Aggregated to {len(df_aggregated)} patient-medicine combinations")
 
