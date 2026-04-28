@@ -97,7 +97,12 @@ tgm_df = tgm_df[column_mapping.keys()]
 # 🧩 Step 1: Rename columns
 tgm_df_renamed = tgm_df.rename(columns=column_mapping)
 
-tgm_df_cleaned = tgm_df_renamed.dropna(subset=['visit_days', 'dispensing_quantity', 'dispensing_frequency_days'])
+# 🧹 Step 1b: Strip leading/trailing whitespace from all string columns
+string_cols = tgm_df_renamed.select_dtypes(include='object').columns
+tgm_df_renamed[string_cols] = tgm_df_renamed[string_cols].apply(lambda col: col.str.strip())
+
+# tgm_df_cleaned = tgm_df_renamed.dropna(subset=['visit_days', 'dispensing_quantity', 'dispensing_frequency_days'])
+tgm_df_cleaned = tgm_df_renamed.dropna(how='all')
 
 # 🧱 Step 2: Convert pandas → Spark
 spark_tgm_df = spark.createDataFrame(tgm_df_cleaned)
@@ -106,6 +111,8 @@ spark_tgm_df = spark.createDataFrame(tgm_df_cleaned)
 for col_name, data_type in schema_mapping.items():
     if col_name in spark_tgm_df.columns:
         spark_tgm_df = spark_tgm_df.withColumn(col_name,  F.col(col_name).try_cast(data_type))
+
+spark_tgm_df.display()
 
 # 💾 Step 4: Truncate and load (overwrite entire table)
 (
