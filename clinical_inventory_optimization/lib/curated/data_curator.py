@@ -67,12 +67,11 @@ class DataCurator:
         self.clsm_mapping_df = dedupe(clsm_mapping_df)
 
         self.mapping_df_map = {
-            'subject':       self.subject_mapping_df,
-            'site':          self.site_mapping_df,
-            'depot':         self.depot_mapping_df,
-            'slsm':          self.slsm_mapping_df,
-            'clsm':          self.clsm_mapping_df,
-            'subject_visit': None,
+            'subject': self.subject_mapping_df,
+            'site':    self.site_mapping_df,
+            'depot':   self.depot_mapping_df,
+            'slsm':    self.slsm_mapping_df,
+            'clsm':    self.clsm_mapping_df,
         }
 
         logger.info("DataCurator initialized")
@@ -315,8 +314,9 @@ class DataCurator:
             .tail(1)
             .reset_index(drop=True)
         )
-        # Reformat Visit Date back to string so convert_date_columns isn't applied twice
-        latest['Visit Date'] = latest['Visit Date'].dt.strftime('%Y-%m-%d')
+        # Reformat Visit Date back to a string format the standard pipeline understands,
+        # so the assembled DataFrame looks like any other raw subject DataFrame.
+        latest['Visit Date'] = latest['Visit Date'].dt.strftime('%d-%b-%Y')
 
         # Step 2: join patient-level info from subject_df
         subject_cols = ['Subject Number', 'Study Protocol', 'Date Randomized', 'Date Discontinued']

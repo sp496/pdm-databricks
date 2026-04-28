@@ -179,24 +179,6 @@ COLUMN_MAPPING = {
         "Comparator Name":             "comparator_name",
         "Country Level Supply Method": "country_level_supply_method",
     },
-    "subject_visit": {
-        "Study Protocol":       "study_protocol",
-        "Arcus Site ID":        "site_id",
-        "Country":              "country",
-        "PI Last Name":         "investigator",
-        "Subject Number":       "subject_number",
-        "Year of Birth":        "year_of_birth",
-        "Sex":                  "gender",
-        "Drug Description":     "tpc",
-        "Status":               "subject_status",
-        "Treatment":            "randomized_treatment",
-        "Date Randomized":      "date_randomized",
-        "Date Discontinued":    "date_treatment_discontinued",
-        "Visit":                "last_study_visit_recorded",
-        "Visit Date":           "last_study_visit_date",
-        "Expected Visit Date":  "next_min_study_visit_date",
-        "Parent Depot":         "parent_depot",
-    },
 }
 
 DATE_COLUMNS = {
@@ -209,10 +191,8 @@ DATE_COLUMNS = {
     ],
     "depot": ["fp_expiry_date"],
     "site":  ["fp_expiry_date"],
-    "slsm":          [],
-    "clsm":          [],
-    # Note: last_study_visit_date is excluded — already parsed to ISO string during assembly
-    "subject_visit": ["date_randomized", "date_treatment_discontinued", "next_min_study_visit_date"],
+    "slsm":  [],
+    "clsm":  [],
 }
 
 SUBJECT_VISIT_DROP_COLUMNS = [
@@ -311,7 +291,8 @@ def main():
             logger.error(f"  Processing failed for {file_type}")
 
     # ------------------------------------------------------------------
-    # 4. Process subject_visit (3-file assembly type)
+    # 4. Assemble subject data from the 3-file source, then process it
+    #    through the regular 'subject' pipeline.
     # ------------------------------------------------------------------
     sv_paths = LOCAL_SUBJECT_VISIT_CSV
     if not all(sv_paths.values()):
@@ -321,7 +302,7 @@ def main():
         if missing:
             logger.warning(f"\n[subject_visit] CSV(s) not found — skipping: {missing}")
         else:
-            logger.info("\n--- Processing subject_visit ---")
+            logger.info("\n--- Assembling subject data from 3-file source ---")
             for label, path in sv_paths.items():
                 logger.info(f"  {label:16s}: {path}")
             logger.info(f"  Date             : {DATE_FOLDER}")
@@ -342,11 +323,11 @@ def main():
             source_file = os.path.basename(sv_paths["visit_summary"])
             result_df = curator.process_data(
                 assembled_df,
-                file_type='subject_visit',
+                file_type='subject',
                 filename=source_file,
                 date_folder=DATE_FOLDER,
-                table_column_mapping=COLUMN_MAPPING["subject_visit"],
-                date_columns=DATE_COLUMNS["subject_visit"],
+                table_column_mapping=COLUMN_MAPPING["subject"],
+                date_columns=DATE_COLUMNS["subject"],
                 study_protocol=study_protocol,
             )
 
