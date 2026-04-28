@@ -279,6 +279,72 @@ class DataCurator:
     # ========================================================================
 
 
+    def assemble_subject_visit_data(
+        self,
+        visit_df: pd.DataFrame,
+        subject_df: pd.DataFrame,
+        site_depot_df: pd.DataFrame,
+        drop_columns: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
+        """
+        Assemble a unified subject-visit DataFrame from three source DataFrames.
+
+        1. Reduce visit_df to the latest visit per subject per drug.
+        2. Join patient-level fields from subject_df.
+        3. Join site-to-depot mapping from site_depot_df.
+        4. Drop any specified unused columns.
+
+        Args:
+            visit_df:      Subject Visit Summary (one row per visit).
+            subject_df:    Subject Summary (patient-level info).
+            site_depot_df: Site-to-Depot mapping.
+            drop_columns:  Raw column names to drop from the assembled result.
+
+        Returns:
+            Assembled DataFrame with one row per subject per drug.
+        """
+        visit_df = visit_df.copy()
+
+        # Step 1: latest visit per subject per drug
+        visit_df['Visit Date'] = pd.to_datetime(visit_df['Visit Date'], dayfirst=True, errors='coerce')
+        latest = (
+            visit_df
+            .sort_values(['Subject Number', 'Drug Description', 'Visit Date'])
+            .groupby(['Subject Number', 'Drug Description'], as_index=False)
+            .tail(1)
+            .reset_index(drop=True)
+        )
+        # Reformat Visit Date back to string so convert_date_columns isn't applied twice
+        latest['Visit Date'] = latest['Visit Date'].dt.strftime('%Y-%m-%d')
+
+        # Step 2: join patient-level info from subject_df
+        subject_cols = ['Subject Number', 'Study Protocol', 'Date Randomized', 'Date Discontinued']
+        subject_dedup = (
+            subject_df[[c for c in subject_cols if c in subject_df.columns]]
+            .drop_duplicates(subset=['Subject Number', 'Study Protocol'])
+        )
+        latest = latest.merge(subject_dedup, how='left', on=['Subject Number', 'Study Protocol'])
+
+        # Step 3: join site-to-depot mapping
+        latest = latest.merge(
+            site_depot_df[['Arcus Site', 'Depot']],
+            how='left',
+            left_on='Arcus Site ID',
+            right_on='Arcus Site',
+        )
+        latest = (
+            latest
+            .rename(columns={'Depot': 'Parent Depot'})
+            .drop(columns=['Arcus Site'], errors='ignore')
+        )
+
+        # Step 4: drop unused columns
+        if drop_columns:
+            latest = latest.drop(columns=[c for c in drop_columns if c in latest.columns])
+
+        logger.info(f"Assembled subject-visit data: {latest.shape[0]} rows, {latest.shape[1]} columns")
+        return latest
+
     def type_specific_processing(self, df: pd.DataFrame, file_type: str) -> pd.DataFrame:
         if file_type == 'subject':
             if 'Year of Birth' in df.columns:
@@ -428,6 +494,61 @@ class DataCurator:
             return None
 
 
+    def process_subject_visit_data(
+        self,
+        visit_df: pd.DataFrame,
+        subject_df: pd.DataFrame,
+        site_depot_df: pd.DataFrame,
+        date_folder: str,
+        source_file: str,
+        table_column_mapping: Dict[str, str],
+        date_columns: List[str],
+        drop_columns: Optional[List[str]] = None,
+        placeholder_columns: Optional[List[str]] = None,
+        final_column_order: Optional[List[str]] = None,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Full processing pipeline for subject-visit data built from three source files.
+
+        Args:
+            visit_df:             Subject Visit Summary DataFrame.
+            subject_df:           Subject Summary DataFrame.
+            site_depot_df:        Site-to-Depot mapping DataFrame.
+            date_folder:          Date folder string (e.g. "20251110").
+            source_file:          Source filename recorded in metadata.
+            table_column_mapping: Raw-col → database-col rename map.
+            date_columns:         Database column names to parse as dates.
+            drop_columns:         Raw columns to drop during assembly.
+            placeholder_columns:  Database column names to add as None.
+            final_column_order:   Ordered list of database column names for output.
+
+        Returns:
+            Processed DataFrame, or None if processing fails.
+        """
+        try:
+            df = self.assemble_subject_visit_data(visit_df, subject_df, site_depot_df, drop_columns)
+
+            df = self.add_metadata_columns(df, date_folder, source_file)
+
+            df = df.rename(columns=table_column_mapping)
+
+            if placeholder_columns:
+                for col in placeholder_columns:
+                    if col not in df.columns:
+                        df[col] = None
+
+            df = self.convert_date_columns(df, date_columns)
+
+            if final_column_order:
+                df = df[[c for c in final_column_order if c in df.columns]]
+
+            logger.info(f"Processed subject-visit data: {df.shape[0]} rows x {df.shape[1]} cols")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error processing subject-visit data: {str(e)}", exc_info=True)
+            return None
+
     # ========================================================================
     # Convenience Methods for Local Debugging (accept file paths)
     # ========================================================================
@@ -462,6 +583,50 @@ class DataCurator:
 
         except Exception as e:
             logger.error(f"Error processing Subject Summary {file_path}: {str(e)}", exc_info=True)
+            return None
+
+    def process_subject_visit_data_from_files(
+        self,
+        visit_file: str,
+        subject_file: str,
+        site_depot_file: str,
+        date_folder: str,
+        table_column_mapping: Dict[str, str],
+        date_columns: List[str],
+        drop_columns: Optional[List[str]] = None,
+        placeholder_columns: Optional[List[str]] = None,
+        final_column_order: Optional[List[str]] = None,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Convenience wrapper for local testing: reads three CSV files and runs
+        the full subject-visit processing pipeline.
+        """
+        try:
+            visit_df      = read_dynamic_csv(visit_file)
+            subject_df    = read_dynamic_csv(subject_file)
+            site_depot_df = read_dynamic_csv(site_depot_file)
+
+            logger.info(f"Loaded visit summary   : {visit_df.shape}")
+            logger.info(f"Loaded subject summary : {subject_df.shape}")
+            logger.info(f"Loaded site-depot map  : {site_depot_df.shape}")
+
+            source_file = os.path.basename(visit_file)
+
+            return self.process_subject_visit_data(
+                visit_df=visit_df,
+                subject_df=subject_df,
+                site_depot_df=site_depot_df,
+                date_folder=date_folder,
+                source_file=source_file,
+                table_column_mapping=table_column_mapping,
+                date_columns=date_columns,
+                drop_columns=drop_columns,
+                placeholder_columns=placeholder_columns,
+                final_column_order=final_column_order,
+            )
+
+        except Exception as e:
+            logger.error(f"Error in process_subject_visit_data_from_files: {str(e)}", exc_info=True)
             return None
 
 

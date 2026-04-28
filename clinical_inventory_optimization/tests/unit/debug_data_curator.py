@@ -71,6 +71,13 @@ LOCAL_CSV = {
     "clsm":    None,
 }
 
+# Subject-visit type uses three input CSVs. Set any value to None to skip.
+LOCAL_SUBJECT_VISIT_CSV = {
+    "visit_summary":   r"../fixtures/sample_csvs/EDGE-Lung_SubjectVisitSummary.csv",
+    "subject_summary": r"../fixtures/sample_csvs/EDGE-Lung_SubjectSummary.csv",
+    "site_depot_map":  r"../fixtures/sample_csvs/Signant-Suvoda Headers.csv",
+}
+
 # Date folder string — the extract date stamped on the source files
 DATE_FOLDER = "20251110"
 
@@ -172,6 +179,24 @@ COLUMN_MAPPING = {
         "Comparator Name":             "comparator_name",
         "Country Level Supply Method": "country_level_supply_method",
     },
+    "subject_visit": {
+        "Study Protocol":       "study_protocol",
+        "Arcus Site ID":        "site_id",
+        "Country":              "country",
+        "PI Last Name":         "investigator",
+        "Subject Number":       "subject_number",
+        "Year of Birth":        "year_of_birth",
+        "Sex":                  "gender",
+        "Drug Description":     "tpc",
+        "Status":               "subject_status",
+        "Treatment":            "randomized_treatment",
+        "Date Randomized":      "date_randomized",
+        "Date Discontinued":    "date_treatment_discontinued",
+        "Visit":                "last_study_visit_recorded",
+        "Visit Date":           "last_study_visit_date",
+        "Expected Visit Date":  "next_min_study_visit_date",
+        "Parent Depot":         "parent_depot",
+    },
 }
 
 DATE_COLUMNS = {
@@ -184,9 +209,47 @@ DATE_COLUMNS = {
     ],
     "depot": ["fp_expiry_date"],
     "site":  ["fp_expiry_date"],
-    "slsm":  [],
-    "clsm":  [],
+    "slsm":          [],
+    "clsm":          [],
+    # Note: last_study_visit_date is excluded — already parsed to ISO string during assembly
+    "subject_visit": ["date_randomized", "date_treatment_discontinued", "next_min_study_visit_date"],
 }
+
+SUBJECT_VISIT_DROP_COLUMNS = [
+    'Finished Lot', 'Expiration Date', 'Manufacturing Lot', 'PCI Item Number Lot',
+    'Drug Types Temporarily Held', 'Drug Types Permanently Discontinued', 'Assigned Drugs',
+    'Quemliclustat Dose Level', 'Drug Code', 'Quantity Dispensed', 'Gilead Site Number',
+]
+
+SUBJECT_VISIT_PLACEHOLDER_COLUMNS = [
+    "date_crossover_enrolled",
+    "date_crossover_approved",
+    "date_crossover_treatment_discontinued",
+    "last_study_visit_number",
+    "next_max_study_visit_date",
+    "additional_drug_status",
+    "last_additional_drug_visit_recorded",
+    "last_additional_drug_visit_date",
+    "last_additional_drug_visit_number",
+    "next_min_additional_drug_visit_date",
+    "next_max_additional_drug_visit_date",
+]
+
+SUBJECT_VISIT_FINAL_COLUMNS = [
+    "study_protocol", "site_id", "country", "parent_depot", "investigator",
+    "subject_number", "year_of_birth", "gender", "tpc",
+    "date_randomized", "date_treatment_discontinued",
+    "date_crossover_enrolled", "date_crossover_approved",
+    "date_crossover_treatment_discontinued",
+    "subject_status", "randomized_treatment",
+    "last_study_visit_recorded", "last_study_visit_date",
+    "last_study_visit_number",
+    "next_min_study_visit_date", "next_max_study_visit_date",
+    "additional_drug_status", "last_additional_drug_visit_recorded",
+    "last_additional_drug_visit_date", "last_additional_drug_visit_number",
+    "next_min_additional_drug_visit_date", "next_max_additional_drug_visit_date",
+    "extract_date", "source_file", "processed_timestamp",
+]
 
 
 # ===========================================================================
@@ -278,16 +341,54 @@ def main():
             logger.error(f"  Processing failed for {file_type}")
 
     # ------------------------------------------------------------------
-    # 4. Summary
+    # 4. Process subject_visit (3-file assembly type)
+    # ------------------------------------------------------------------
+    sv_paths = LOCAL_SUBJECT_VISIT_CSV
+    if not all(sv_paths.values()):
+        logger.info("\n[subject_visit] Not all CSVs configured — skipping")
+    else:
+        missing = [p for p in sv_paths.values() if not os.path.exists(p)]
+        if missing:
+            logger.warning(f"\n[subject_visit] CSV(s) not found — skipping: {missing}")
+        else:
+            logger.info("\n--- Processing subject_visit ---")
+            for label, path in sv_paths.items():
+                logger.info(f"  {label:16s}: {path}")
+            logger.info(f"  Date             : {DATE_FOLDER}")
+
+            result_df = curator.process_subject_visit_data_from_files(
+                visit_file=sv_paths["visit_summary"],
+                subject_file=sv_paths["subject_summary"],
+                site_depot_file=sv_paths["site_depot_map"],
+                date_folder=DATE_FOLDER,
+                table_column_mapping=COLUMN_MAPPING["subject_visit"],
+                date_columns=DATE_COLUMNS["subject_visit"],
+                drop_columns=SUBJECT_VISIT_DROP_COLUMNS,
+                placeholder_columns=SUBJECT_VISIT_PLACEHOLDER_COLUMNS,
+                final_column_order=SUBJECT_VISIT_FINAL_COLUMNS,
+            )
+
+            if result_df is not None:
+                results["subject_visit"] = result_df
+                logger.info(f"  Result: {result_df.shape[0]} rows x {result_df.shape[1]} cols")
+                logger.info(f"  Columns: {list(result_df.columns)}")
+                print(f"\n[subject_visit] First 3 rows:")
+                print(result_df.head(3).to_string())
+                _write_output(result_df, "subject_visit")
+            else:
+                logger.error("  Processing failed for subject_visit")
+
+    # ------------------------------------------------------------------
+    # 5. Summary
     # ------------------------------------------------------------------
     logger.info("\n" + "=" * 70)
     logger.info("Summary")
     logger.info("=" * 70)
-    for file_type in LOCAL_CSV:
+    for file_type in list(LOCAL_CSV) + ["subject_visit"]:
         if file_type in results:
-            logger.info(f"  {file_type:8s}: {results[file_type].shape[0]} rows processed OK")
+            logger.info(f"  {file_type:16s}: {results[file_type].shape[0]} rows processed OK")
         else:
-            logger.info(f"  {file_type:8s}: skipped or failed")
+            logger.info(f"  {file_type:16s}: skipped or failed")
 
     return results
 
