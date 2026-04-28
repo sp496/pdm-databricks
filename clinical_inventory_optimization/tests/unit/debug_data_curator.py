@@ -36,7 +36,7 @@ for _p in [_PROJECT_ROOT, _REPO_ROOT]:
 # Imports (no Databricks / pyspark required)
 # ---------------------------------------------------------------------------
 import logging
-from lib.curated.data_curator import DataCurator, load_excel_mapping
+from lib.curated.data_curator import DataCurator, load_excel_mapping, read_dynamic_csv
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -221,36 +221,6 @@ SUBJECT_VISIT_DROP_COLUMNS = [
     'Quemliclustat Dose Level', 'Drug Code', 'Quantity Dispensed', 'Gilead Site Number',
 ]
 
-SUBJECT_VISIT_PLACEHOLDER_COLUMNS = [
-    "date_crossover_enrolled",
-    "date_crossover_approved",
-    "date_crossover_treatment_discontinued",
-    "last_study_visit_number",
-    "next_max_study_visit_date",
-    "additional_drug_status",
-    "last_additional_drug_visit_recorded",
-    "last_additional_drug_visit_date",
-    "last_additional_drug_visit_number",
-    "next_min_additional_drug_visit_date",
-    "next_max_additional_drug_visit_date",
-]
-
-SUBJECT_VISIT_FINAL_COLUMNS = [
-    "study_protocol", "site_id", "country", "parent_depot", "investigator",
-    "subject_number", "year_of_birth", "gender", "tpc",
-    "date_randomized", "date_treatment_discontinued",
-    "date_crossover_enrolled", "date_crossover_approved",
-    "date_crossover_treatment_discontinued",
-    "subject_status", "randomized_treatment",
-    "last_study_visit_recorded", "last_study_visit_date",
-    "last_study_visit_number",
-    "next_min_study_visit_date", "next_max_study_visit_date",
-    "additional_drug_status", "last_additional_drug_visit_recorded",
-    "last_additional_drug_visit_date", "last_additional_drug_visit_number",
-    "next_min_additional_drug_visit_date", "next_max_additional_drug_visit_date",
-    "extract_date", "source_file", "processed_timestamp",
-]
-
 
 # ===========================================================================
 # Helper — load a mapping Excel file, returning None gracefully if missing
@@ -356,16 +326,28 @@ def main():
                 logger.info(f"  {label:16s}: {path}")
             logger.info(f"  Date             : {DATE_FOLDER}")
 
-            result_df = curator.process_subject_visit_data_from_files(
-                visit_file=sv_paths["visit_summary"],
-                subject_file=sv_paths["subject_summary"],
-                site_depot_file=sv_paths["site_depot_map"],
+            visit_df      = read_dynamic_csv(sv_paths["visit_summary"])
+            subject_df    = read_dynamic_csv(sv_paths["subject_summary"])
+            site_depot_df = read_dynamic_csv(sv_paths["site_depot_map"])
+
+            assembled_df = curator.assemble_subject_visit_data(
+                visit_df, subject_df, site_depot_df,
+                drop_columns=SUBJECT_VISIT_DROP_COLUMNS,
+            )
+
+            # Study protocol comes from the data, not the filename
+            study_protocol = assembled_df['Study Protocol'].dropna().iloc[0]
+            assembled_df = assembled_df.drop(columns=['Study Protocol'])
+
+            source_file = os.path.basename(sv_paths["visit_summary"])
+            result_df = curator.process_data(
+                assembled_df,
+                file_type='subject_visit',
+                filename=source_file,
                 date_folder=DATE_FOLDER,
                 table_column_mapping=COLUMN_MAPPING["subject_visit"],
                 date_columns=DATE_COLUMNS["subject_visit"],
-                drop_columns=SUBJECT_VISIT_DROP_COLUMNS,
-                placeholder_columns=SUBJECT_VISIT_PLACEHOLDER_COLUMNS,
-                final_column_order=SUBJECT_VISIT_FINAL_COLUMNS,
+                study_protocol=study_protocol,
             )
 
             if result_df is not None:

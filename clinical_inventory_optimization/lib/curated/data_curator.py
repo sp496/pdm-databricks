@@ -67,11 +67,12 @@ class DataCurator:
         self.clsm_mapping_df = dedupe(clsm_mapping_df)
 
         self.mapping_df_map = {
-            'subject': self.subject_mapping_df,
-            'site': self.site_mapping_df,
-            'depot': self.depot_mapping_df,
-            'slsm': self.slsm_mapping_df,
-            'clsm': self.clsm_mapping_df
+            'subject':       self.subject_mapping_df,
+            'site':          self.site_mapping_df,
+            'depot':         self.depot_mapping_df,
+            'slsm':          self.slsm_mapping_df,
+            'clsm':          self.clsm_mapping_df,
+            'subject_visit': None,
         }
 
         logger.info("DataCurator initialized")
@@ -446,7 +447,8 @@ class DataCurator:
                      filename: str,
                      date_folder: str,
                      table_column_mapping: Dict[str, str],
-                     date_columns: List[str]) -> Optional[pd.DataFrame]:
+                     date_columns: List[str],
+                     study_protocol: str = None) -> Optional[pd.DataFrame]:
         """
         Process a single Subject Summary DataFrame.
 
@@ -454,16 +456,18 @@ class DataCurator:
             df: Input DataFrame
             filename: Source filename
             date_folder: Date folder string (e.g., "20251106")
-            column_mapping: Dictionary to rename columns
+            table_column_mapping: Dictionary to rename columns
             date_columns: List of date column names to convert
+            study_protocol: Optional override — skips filename extraction when provided
+                            (use for file types where protocol comes from the data itself)
 
         Returns:
             Processed DataFrame, or None if processing fails
         """
         try:
 
-            # Extract Study Protocol from filename
-            study_protocol = self.extract_study_protocol(filename)
+            # Use provided study protocol or extract from filename
+            study_protocol = study_protocol or self.extract_study_protocol(filename)
 
             # Standardize the dataframe
             if self.mapping_df_map[file_type] is not None:
@@ -493,61 +497,6 @@ class DataCurator:
             logger.error(f"Error processing Subject Summary {filename}: {str(e)}", exc_info=True)
             return None
 
-
-    def process_subject_visit_data(
-        self,
-        visit_df: pd.DataFrame,
-        subject_df: pd.DataFrame,
-        site_depot_df: pd.DataFrame,
-        date_folder: str,
-        source_file: str,
-        table_column_mapping: Dict[str, str],
-        date_columns: List[str],
-        drop_columns: Optional[List[str]] = None,
-        placeholder_columns: Optional[List[str]] = None,
-        final_column_order: Optional[List[str]] = None,
-    ) -> Optional[pd.DataFrame]:
-        """
-        Full processing pipeline for subject-visit data built from three source files.
-
-        Args:
-            visit_df:             Subject Visit Summary DataFrame.
-            subject_df:           Subject Summary DataFrame.
-            site_depot_df:        Site-to-Depot mapping DataFrame.
-            date_folder:          Date folder string (e.g. "20251110").
-            source_file:          Source filename recorded in metadata.
-            table_column_mapping: Raw-col → database-col rename map.
-            date_columns:         Database column names to parse as dates.
-            drop_columns:         Raw columns to drop during assembly.
-            placeholder_columns:  Database column names to add as None.
-            final_column_order:   Ordered list of database column names for output.
-
-        Returns:
-            Processed DataFrame, or None if processing fails.
-        """
-        try:
-            df = self.assemble_subject_visit_data(visit_df, subject_df, site_depot_df, drop_columns)
-
-            df = self.add_metadata_columns(df, date_folder, source_file)
-
-            df = df.rename(columns=table_column_mapping)
-
-            if placeholder_columns:
-                for col in placeholder_columns:
-                    if col not in df.columns:
-                        df[col] = None
-
-            df = self.convert_date_columns(df, date_columns)
-
-            if final_column_order:
-                df = df[[c for c in final_column_order if c in df.columns]]
-
-            logger.info(f"Processed subject-visit data: {df.shape[0]} rows x {df.shape[1]} cols")
-            return df
-
-        except Exception as e:
-            logger.error(f"Error processing subject-visit data: {str(e)}", exc_info=True)
-            return None
 
     # ========================================================================
     # Convenience Methods for Local Debugging (accept file paths)
@@ -583,50 +532,6 @@ class DataCurator:
 
         except Exception as e:
             logger.error(f"Error processing Subject Summary {file_path}: {str(e)}", exc_info=True)
-            return None
-
-    def process_subject_visit_data_from_files(
-        self,
-        visit_file: str,
-        subject_file: str,
-        site_depot_file: str,
-        date_folder: str,
-        table_column_mapping: Dict[str, str],
-        date_columns: List[str],
-        drop_columns: Optional[List[str]] = None,
-        placeholder_columns: Optional[List[str]] = None,
-        final_column_order: Optional[List[str]] = None,
-    ) -> Optional[pd.DataFrame]:
-        """
-        Convenience wrapper for local testing: reads three CSV files and runs
-        the full subject-visit processing pipeline.
-        """
-        try:
-            visit_df      = read_dynamic_csv(visit_file)
-            subject_df    = read_dynamic_csv(subject_file)
-            site_depot_df = read_dynamic_csv(site_depot_file)
-
-            logger.info(f"Loaded visit summary   : {visit_df.shape}")
-            logger.info(f"Loaded subject summary : {subject_df.shape}")
-            logger.info(f"Loaded site-depot map  : {site_depot_df.shape}")
-
-            source_file = os.path.basename(visit_file)
-
-            return self.process_subject_visit_data(
-                visit_df=visit_df,
-                subject_df=subject_df,
-                site_depot_df=site_depot_df,
-                date_folder=date_folder,
-                source_file=source_file,
-                table_column_mapping=table_column_mapping,
-                date_columns=date_columns,
-                drop_columns=drop_columns,
-                placeholder_columns=placeholder_columns,
-                final_column_order=final_column_order,
-            )
-
-        except Exception as e:
-            logger.error(f"Error in process_subject_visit_data_from_files: {str(e)}", exc_info=True)
             return None
 
 
