@@ -54,28 +54,25 @@ _OUTPUTS_DIR    = os.path.join(_TESTS_DIR, "outputs")
 # Excel mapping files — place in tests/fixtures/ and update filenames below.
 # Set to None if you don't have the file locally; standardization will be skipped.
 LOCAL_MAPPING = {
-    "subject": r"../fixtures/Subject Summary Header Mapping.xlsx",
-    "depot":   None,
-    "site":    None,
-    "slsm":    None,   # no mapping file for supply-method files
-    "clsm":    None,
+    "subject":    r"../fixtures/Subject Summary Header Mapping.xlsx",
+    "depot":      None,
+    "site":       None,
+    "slsm":       None,
+    "clsm":       None,
+    "site_depot": r"../fixtures/Site-Depot Mapping.csv",
 }
 
 # Sample CSV files — place in tests/fixtures/sample_csvs/ and update filenames below.
 # Set to None to skip that file type.
+# If subject_visit is set, subject is treated as the Subject Summary and assembly
+# is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
-    "subject": None, #r"../fixtures/sample_csvs/Gilead GS-US-409-5704_Subject Summary (Unblinded)Subject Summary2026-04-14-18-57-28.csv",
-    "depot":   None,
-    "site":    None,
-    "slsm":    None,
-    "clsm":    None,
-}
-
-# Subject-visit type uses three input CSVs. Set any value to None to skip.
-LOCAL_SUBJECT_VISIT_CSV = {
-    "visit_summary":   r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.csv",
-    "subject_summary": r"../fixtures/sample_csvs/EDGE-Lung_Subject SummarySubject Summary2026-04-28-13-56-25.csv",
-    "site_depot_map":  r"../fixtures/Site-Depot Mapping.csv",
+    "subject":       r"../fixtures/sample_csvs/EDGE-Lung_Subject SummarySubject Summary2026-04-28-13-56-25.csv",
+    "depot":         None,
+    "site":          None,
+    "slsm":          None,
+    "clsm":          None,
+    "subject_visit": r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.csv",
 }
 
 # Date folder string — the extract date stamped on the source files
@@ -254,6 +251,9 @@ def main():
     results = {}
 
     for file_type, csv_path in LOCAL_CSV.items():
+        if file_type == "subject_visit":
+            continue  # drives assembly mode for subject; not an independent type
+
         if not csv_path:
             logger.info(f"\n[{file_type}] No CSV configured — skipping")
             continue
@@ -263,16 +263,50 @@ def main():
             continue
 
         logger.info(f"\n--- Processing {file_type} ---")
-        logger.info(f"  CSV  : {csv_path}")
         logger.info(f"  Date : {DATE_FOLDER}")
 
-        result_df = curator.process_data_from_file(
-            file_path=csv_path,
-            file_type=file_type,
-            date_folder=DATE_FOLDER,
-            table_column_mapping=COLUMN_MAPPING[file_type],
-            date_columns=DATE_COLUMNS[file_type],
-        )
+        # Subject with visit summary: assemble from 3 files then process normally
+        if file_type == "subject" and LOCAL_CSV.get("subject_visit"):
+            visit_path      = LOCAL_CSV["subject_visit"]
+            site_depot_path = LOCAL_MAPPING.get("site_depot")
+
+            missing = [p for p in [visit_path, site_depot_path] if not p or not os.path.exists(p)]
+            if missing:
+                logger.warning(f"  Assembly file(s) not found — skipping: {missing}")
+                continue
+
+            logger.info(f"  subject_summary : {csv_path}")
+            logger.info(f"  visit_summary   : {visit_path}")
+            logger.info(f"  site_depot_map  : {site_depot_path}")
+
+            visit_df      = read_dynamic_csv(visit_path)
+            subject_df    = read_dynamic_csv(csv_path)
+            site_depot_df = read_dynamic_csv(site_depot_path)
+
+            assembled_df = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
+
+            study_protocol = assembled_df['Study Protocol'].dropna().iloc[0]
+            assembled_df = assembled_df.drop(columns=['Study Protocol'])
+
+            result_df = curator.process_data(
+                assembled_df,
+                file_type='subject',
+                filename=os.path.basename(visit_path),
+                date_folder=DATE_FOLDER,
+                table_column_mapping=COLUMN_MAPPING["subject"],
+                date_columns=DATE_COLUMNS["subject"],
+                study_protocol=study_protocol,
+            )
+
+        else:
+            logger.info(f"  CSV  : {csv_path}")
+            result_df = curator.process_data_from_file(
+                file_path=csv_path,
+                file_type=file_type,
+                date_folder=DATE_FOLDER,
+                table_column_mapping=COLUMN_MAPPING[file_type],
+                date_columns=DATE_COLUMNS[file_type],
+            )
 
         if result_df is not None:
             results[file_type] = result_df
@@ -285,61 +319,18 @@ def main():
             logger.error(f"  Processing failed for {file_type}")
 
     # ------------------------------------------------------------------
-    # 4. Assemble subject data from the 3-file source, then process it
-    #    through the regular 'subject' pipeline.
-    # ------------------------------------------------------------------
-    sv_paths = LOCAL_SUBJECT_VISIT_CSV
-    if not all(sv_paths.values()):
-        logger.info("\n[subject_visit] Not all CSVs configured — skipping")
-    else:
-        missing = [p for p in sv_paths.values() if not os.path.exists(p)]
-        if missing:
-            logger.warning(f"\n[subject_visit] CSV(s) not found — skipping: {missing}")
-        else:
-            logger.info("\n--- Assembling subject data from 3-file source ---")
-            for label, path in sv_paths.items():
-                logger.info(f"  {label:16s}: {path}")
-            logger.info(f"  Date             : {DATE_FOLDER}")
-
-            visit_df = read_dynamic_csv(sv_paths["visit_summary"])
-            subject_df = read_dynamic_csv(sv_paths["subject_summary"])
-            site_depot_df = read_dynamic_csv(sv_paths["site_depot_map"])
-
-            assembled_df = curator.assemble_subject_visit_data(
-                visit_df, subject_df, site_depot_df
-            )
-
-            source_file = os.path.basename(sv_paths["visit_summary"])
-            result_df = curator.process_data(
-                assembled_df,
-                file_type='subject',
-                filename=source_file,
-                date_folder=DATE_FOLDER,
-                table_column_mapping=COLUMN_MAPPING["subject"],
-                date_columns=DATE_COLUMNS["subject"]
-            )
-
-            if result_df is not None:
-                results["subject_visit"] = result_df
-                logger.info(f"  Result: {result_df.shape[0]} rows x {result_df.shape[1]} cols")
-                logger.info(f"  Columns: {list(result_df.columns)}")
-                print(f"\n[subject_visit] First 3 rows:")
-                print(result_df.head(3).to_string())
-                _write_output(result_df, "subject_visit")
-            else:
-                logger.error("  Processing failed for subject_visit")
-
-    # ------------------------------------------------------------------
-    # 5. Summary
+    # 4. Summary
     # ------------------------------------------------------------------
     logger.info("\n" + "=" * 70)
     logger.info("Summary")
     logger.info("=" * 70)
-    for file_type in list(LOCAL_CSV) + ["subject_visit"]:
+    for file_type in LOCAL_CSV:
+        if file_type == "subject_visit":
+            continue
         if file_type in results:
-            logger.info(f"  {file_type:16s}: {results[file_type].shape[0]} rows processed OK")
+            logger.info(f"  {file_type:8s}: {results[file_type].shape[0]} rows processed OK")
         else:
-            logger.info(f"  {file_type:16s}: skipped or failed")
+            logger.info(f"  {file_type:8s}: skipped or failed")
 
     return results
 

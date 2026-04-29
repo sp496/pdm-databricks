@@ -283,29 +283,21 @@ class DataCurator:
         self,
         visit_df: pd.DataFrame,
         subject_df: pd.DataFrame,
-        site_depot_df: pd.DataFrame
+        site_depot_df: pd.DataFrame,
     ) -> pd.DataFrame:
         """
         Assemble a unified subject-visit DataFrame from three source DataFrames.
 
-        1. Reduce visit_df to the latest visit per subject per drug.
-        2. Join patient-level fields from subject_df.
-        3. Join site-to-depot mapping from site_depot_df.
-        4. Drop any specified unused columns.
-
-        Args:
-            visit_df:      Subject Visit Summary (one row per visit).
-            subject_df:    Subject Summary (patient-level info).
-            site_depot_df: Site-to-Depot mapping.
-            drop_columns:  Raw column names to drop from the assembled result.
+        Reduces visit_df to the latest visit per subject per drug, joins
+        patient-level fields from subject_df, and maps sites to depots
+        via site_depot_df.
 
         Returns:
-            Assembled DataFrame with one row per subject per drug.
+            DataFrame with one row per subject per drug.
         """
         visit_df = visit_df.copy()
-
-        # Step 1: latest visit per subject per drug
         visit_df['Visit Date'] = pd.to_datetime(visit_df['Visit Date'], dayfirst=True, errors='coerce')
+
         latest = (
             visit_df
             .sort_values(['Subject Number', 'Drug Description', 'Visit Date'])
@@ -313,32 +305,19 @@ class DataCurator:
             .tail(1)
             .reset_index(drop=True)
         )
-
-        # Step 4: drop unused columns
-        drop_columns = ['Gilead Site Number']
-        if drop_columns:
-            latest = latest.drop(columns=[c for c in drop_columns if c in latest.columns])
-
-        # Reformat Visit Date back to a string format the standard pipeline understands,
-        # so the assembled DataFrame looks like any other raw subject DataFrame.
+        latest = latest.drop(columns=[c for c in ['Gilead Site Number'] if c in latest.columns])
         latest['Visit Date'] = latest['Visit Date'].dt.strftime('%d-%b-%Y')
 
-        # Step 2: join patient-level info from subject_df
         subject_cols = ['Subject Number', 'Study Protocol', 'Date Randomized', 'Date Discontinued', 'Gilead Site Number']
-
-        subject_df = subject_df[[c for c in subject_cols if c in subject_df.columns]]
-
-        latest = latest.merge(subject_df, how='left', on=['Subject Number'])
-
-        # Step 3: join site-to-depot mapping
         latest = latest.merge(
-            site_depot_df[['Arcus Site', 'Depot']],
+            subject_df[[c for c in subject_cols if c in subject_df.columns]],
             how='left',
-            left_on='Arcus Site ID',
-            right_on='Arcus Site',
+            on=['Subject Number'],
         )
+
         latest = (
             latest
+            .merge(site_depot_df[['Arcus Site', 'Depot']], how='left', left_on='Arcus Site ID', right_on='Arcus Site')
             .rename(columns={'Depot': 'Parent Depot'})
             .drop(columns=['Arcus Site'], errors='ignore')
         )
