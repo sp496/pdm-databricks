@@ -325,6 +325,82 @@ class DataCurator:
         logger.info(f"Assembled subject-visit data: {latest.shape[0]} rows, {latest.shape[1]} columns")
         return latest
 
+    def assemble_site_data(
+        self,
+        site_df: pd.DataFrame,
+        site_depot_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """
+        Preprocess site inventory data from two source DataFrames.
+
+        1. Join site_depot_df to get Parent Depot and Country per site.
+        2. Drop rows missing site, quantity, or drug status; convert quantity to int.
+        3. Pivot Drug Status into quantity columns — one output row per site/lot grain.
+
+        Returns:
+            Transformed DataFrame with one row per site/lot combination.
+        """
+        status_mapping = {
+            'In Transit':  'quantity_study_drug_requested',
+            'Intact':      'quantity_study_drug_available',
+            'Quarantined': 'quantity_study_drug_quarantined',
+            'Destroyed':   'quantity_study_drug_lost',
+        }
+
+        groupby_cols = [
+            'Study Protocol', 'Arcus Site Number', 'PI Last Name', 'Site Name',
+            'Finished Lot', 'Expiration Date', 'Country', 'Parent Depot',
+        ]
+
+        quantity_columns = [
+            'quantity_study_drug_requested', 'quantity_study_drug_available',
+            'quantity_study_drug_assigned',  'quantity_study_drug_lost',
+            'quantity_study_drug_damaged',   'quantity_study_drug_quarantined',
+            'quantity_study_drug_rejected',  'quantity_study_drug_do_not_dispense',
+            'quantity_study_drug_expired',   'quantity_study_drug_total',
+        ]
+
+        # Step 1: join depot mapping
+        df = (
+            site_df
+            .merge(
+                site_depot_df[['Arcus Site', 'Depot', 'Depot Country']],
+                how='left',
+                left_on='Arcus Site Number',
+                right_on='Arcus Site',
+            )
+            .rename(columns={'Depot': 'Parent Depot', 'Depot Country': 'Country'})
+            .drop(columns=['Arcus Site'], errors='ignore')
+        )
+
+        # Step 2: clean
+        df = df.dropna(subset=['Arcus Site Number', 'Quantity (Site Units)', 'Drug Status'])
+        df['Quantity (Site Units)'] = (
+            pd.to_numeric(df['Quantity (Site Units)'], errors='coerce')
+            .fillna(0)
+            .astype(int)
+        )
+
+        # Step 3: pivot Drug Status → quantity columns
+        result_list = []
+        for name, group in df.groupby(groupby_cols):
+            row_dict = dict(zip(groupby_cols, name))
+            for q_col in quantity_columns:
+                row_dict[q_col] = 0
+            for _, row in group.iterrows():
+                drug_status = row['Drug Status']
+                quantity    = row['Quantity (Site Units)']
+                if drug_status in status_mapping:
+                    row_dict[status_mapping[drug_status]] += quantity
+            row_dict['quantity_study_drug_total'] = sum(
+                row_dict[c] for c in quantity_columns if c != 'quantity_study_drug_total'
+            )
+            result_list.append(row_dict)
+
+        result = pd.DataFrame(result_list)
+        logger.info(f"Assembled site data: {result.shape[0]} rows, {result.shape[1]} columns")
+        return result
+
     def type_specific_processing(self, df: pd.DataFrame, file_type: str) -> pd.DataFrame:
         if file_type == 'subject':
             if 'Year of Birth' in df.columns:

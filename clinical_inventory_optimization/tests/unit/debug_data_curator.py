@@ -294,6 +294,32 @@ def main():
                 date_columns=DATE_COLUMNS["subject"]
             )
 
+        # Site inventory: join depot mapping and pivot when EDGE-Lung mode is active
+        elif file_type == "site" and LOCAL_CSV.get("subject_visit"):
+            site_depot_path = LOCAL_MAPPING.get("site_depot")
+
+            missing = [p for p in [site_depot_path] if not p or not os.path.exists(p)]
+            if missing:
+                logger.warning(f"  Assembly file(s) not found — skipping: {missing}")
+                continue
+
+            logger.info(f"  site_inventory : {csv_path}")
+            logger.info(f"  site_depot_map : {site_depot_path}")
+
+            site_df       = read_dynamic_csv(csv_path)
+            site_depot_df = read_dynamic_csv(site_depot_path)
+
+            assembled_site_df = curator.assemble_site_data(site_df, site_depot_df)
+
+            result_df = curator.process_data(
+                assembled_site_df,
+                file_type='site',
+                filename=os.path.basename(csv_path),
+                date_folder=DATE_FOLDER,
+                table_column_mapping=COLUMN_MAPPING["site"],
+                date_columns=DATE_COLUMNS["site"],
+            )
+
         else:
             logger.info(f"  CSV  : {csv_path}")
             result_df = curator.process_data_from_file(
