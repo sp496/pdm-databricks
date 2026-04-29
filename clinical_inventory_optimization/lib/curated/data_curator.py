@@ -341,23 +341,24 @@ class DataCurator:
             Transformed DataFrame with one row per site/lot combination.
         """
         status_mapping = {
-            'In Transit':  'quantity_study_drug_requested',
-            'Intact':      'quantity_study_drug_available',
-            'Quarantined': 'quantity_study_drug_quarantined',
-            'Destroyed':   'quantity_study_drug_lost',
+            'In Transit': 'Quantity Study Drug - Requested',
+            'Intact': 'Quantity Study Drug - Available',
+            'Quarantined': 'Quantity Study Drug - Quarantined',
+            'Assigned': 'Quantity Study Drug - Assigned',
+            'Damaged': 'Quantity Study Drug - Damaged',
         }
 
         groupby_cols = [
-            'Study Protocol', 'Arcus Site Number', 'PI Last Name', 'Site Name',
-            'Finished Lot', 'Expiration Date', 'Country', 'Parent Depot',
+            'Arcus Site Number', 'Gilead Site Number', 'PI Last Name', 'Drug Description', 'Drug Code',
+            'Finished Lot', 'Expiration Date', 'Country', 'Parent Depot'
         ]
 
         quantity_columns = [
-            'quantity_study_drug_requested', 'quantity_study_drug_available',
-            'quantity_study_drug_assigned',  'quantity_study_drug_lost',
-            'quantity_study_drug_damaged',   'quantity_study_drug_quarantined',
-            'quantity_study_drug_rejected',  'quantity_study_drug_do_not_dispense',
-            'quantity_study_drug_expired',   'quantity_study_drug_total',
+            'Quantity Study Drug - Requested', 'Quantity Study Drug - Available',
+            'Quantity Study Drug - Assigned', 'Quantity Study Drug - Lost',
+            'Quantity Study Drug - Damaged', 'Quantity Study Drug - Quarantined',
+            'Quantity Study Drug - Rejected', 'Quantity Study Drug - Do Not Dispense',
+            'Quantity Study Drug - Expired', 'Quantity Study Drug - Total',
         ]
 
         # Step 1: join depot mapping
@@ -389,11 +390,11 @@ class DataCurator:
                 row_dict[q_col] = 0
             for _, row in group.iterrows():
                 drug_status = row['Drug Status']
-                quantity    = row['Quantity (Site Units)']
+                quantity = row['Quantity (Site Units)']
                 if drug_status in status_mapping:
                     row_dict[status_mapping[drug_status]] += quantity
-            row_dict['quantity_study_drug_total'] = sum(
-                row_dict[c] for c in quantity_columns if c != 'quantity_study_drug_total'
+            row_dict['Quantity Study Drug - Total'] = sum(
+                row_dict[c] for c in quantity_columns if c != 'Quantity Study Drug - Total'
             )
             result_list.append(row_dict)
 

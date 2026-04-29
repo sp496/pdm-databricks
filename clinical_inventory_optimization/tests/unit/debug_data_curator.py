@@ -55,8 +55,8 @@ _OUTPUTS_DIR    = os.path.join(_TESTS_DIR, "outputs")
 # Set to None if you don't have the file locally; standardization will be skipped.
 LOCAL_MAPPING = {
     "subject":    r"../fixtures/Subject Summary Header Mapping.xlsx",
-    "depot":      None,
-    "site":       None,
+    "depot":      r"../fixtures/Depot Inventory Header Mapping.xlsx",
+    "site":       r"../fixtures/Site Inventory Header Mapping.xlsx",
     "slsm":       None,
     "clsm":       None,
     "site_depot": r"../fixtures/Site-Depot Mapping.csv",
@@ -67,9 +67,9 @@ LOCAL_MAPPING = {
 # If subject_visit is set, subject is treated as the Subject Summary and assembly
 # is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
-    "subject":       r"../fixtures/sample_csvs/EDGE-Lung_Subject SummarySubject Summary2026-04-28-13-56-25.csv",
+    "subject":       None,
     "depot":         None,
-    "site":          None,
+    "site":          r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsSite2026-04-28-13-57-20.csv",
     "slsm":          None,
     "clsm":          None,
     "subject_visit": r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.csv",
@@ -306,7 +306,7 @@ def main():
             logger.info(f"  site_inventory : {csv_path}")
             logger.info(f"  site_depot_map : {site_depot_path}")
 
-            site_df       = read_dynamic_csv(csv_path)
+            site_df = read_dynamic_csv(csv_path)
             site_depot_df = read_dynamic_csv(site_depot_path)
 
             assembled_site_df = curator.assemble_site_data(site_df, site_depot_df)
