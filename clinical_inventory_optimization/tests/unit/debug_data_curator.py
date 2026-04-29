@@ -294,6 +294,22 @@ def main():
                 date_columns=DATE_COLUMNS["subject"]
             )
 
+        # Depot inventory: pivot Drug Status into quantity columns when EDGE-Lung mode is active
+        elif file_type == "depot" and LOCAL_CSV.get("subject_visit"):
+            logger.info(f"  depot_inventory : {csv_path}")
+
+            depot_df = read_dynamic_csv(csv_path)
+            assembled_depot_df = curator.assemble_depot_data(depot_df)
+
+            result_df = curator.process_data(
+                assembled_depot_df,
+                file_type='depot',
+                filename=os.path.basename(csv_path),
+                date_folder=DATE_FOLDER,
+                table_column_mapping=COLUMN_MAPPING["depot"],
+                date_columns=DATE_COLUMNS["depot"],
+            )
+
         # Site inventory: join depot mapping and pivot when EDGE-Lung mode is active
         elif file_type == "site" and LOCAL_CSV.get("subject_visit"):
             site_depot_path = LOCAL_MAPPING.get("site_depot")

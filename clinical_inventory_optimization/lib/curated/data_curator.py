@@ -402,6 +402,67 @@ class DataCurator:
         logger.info(f"Assembled site data: {result.shape[0]} rows, {result.shape[1]} columns")
         return result
 
+    def assemble_depot_data(
+        self,
+        depot_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """
+        Preprocess depot inventory data.
+
+        1. Drop rows missing depot, quantity, or drug status; convert quantity to int.
+        2. Pivot Drug Status into quantity columns — one output row per depot/lot grain.
+
+        Returns:
+            Transformed DataFrame with one row per depot/lot combination.
+        """
+        status_mapping = {
+            'In Transit':  'Quantity Study Drug - Requested',
+            'Intact':      'Quantity Study Drug - Available',
+            'Quarantined': 'Quantity Study Drug - Quarantined',
+            'Assigned':    'Quantity Study Drug - Assigned',
+            'Damaged':     'Quantity Study Drug - Damaged',
+        }
+
+        groupby_cols = [
+            'Depot Number', 'Depot Name', 'Drug Description', 'Drug Code',
+            'Finished Lot', 'Expiration Date',
+        ]
+
+        quantity_columns = [
+            'Quantity Study Drug - Requested', 'Quantity Study Drug - Available',
+            'Quantity Study Drug - Assigned',  'Quantity Study Drug - Lost',
+            'Quantity Study Drug - Damaged',   'Quantity Study Drug - Quarantined',
+            'Quantity Study Drug - Rejected',  'Quantity Study Drug - Do Not Ship',
+            'Quantity Study Drug - Expired',   'Quantity Study Drug - Packaged (Unavailable)',
+            'Quantity Study Drug - Total',
+        ]
+
+        df = depot_df.dropna(subset=['Depot Number', 'Quantity (Depot Units)', 'Drug Status']).copy()
+        df['Quantity (Depot Units)'] = (
+            pd.to_numeric(df['Quantity (Depot Units)'], errors='coerce')
+            .fillna(0)
+            .astype(int)
+        )
+
+        result_list = []
+        for name, group in df.groupby(groupby_cols):
+            row_dict = dict(zip(groupby_cols, name))
+            for q_col in quantity_columns:
+                row_dict[q_col] = 0
+            for _, row in group.iterrows():
+                drug_status = row['Drug Status']
+                quantity    = row['Quantity (Depot Units)']
+                if drug_status in status_mapping:
+                    row_dict[status_mapping[drug_status]] += quantity
+            row_dict['Quantity Study Drug - Total'] = sum(
+                row_dict[c] for c in quantity_columns if c != 'Quantity Study Drug - Total'
+            )
+            result_list.append(row_dict)
+
+        result = pd.DataFrame(result_list)
+        logger.info(f"Assembled depot data: {result.shape[0]} rows, {result.shape[1]} columns")
+        return result
+
     def type_specific_processing(self, df: pd.DataFrame, file_type: str) -> pd.DataFrame:
         if file_type == 'subject':
             if 'Year of Birth' in df.columns:
