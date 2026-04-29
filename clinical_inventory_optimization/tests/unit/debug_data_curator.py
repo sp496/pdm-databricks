@@ -285,17 +285,13 @@ def main():
 
             assembled_df = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
 
-            study_protocol = assembled_df['Study Protocol'].dropna().iloc[0]
-            assembled_df = assembled_df.drop(columns=['Study Protocol'])
-
             result_df = curator.process_data(
                 assembled_df,
                 file_type='subject',
                 filename=os.path.basename(visit_path),
                 date_folder=DATE_FOLDER,
                 table_column_mapping=COLUMN_MAPPING["subject"],
-                date_columns=DATE_COLUMNS["subject"],
-                study_protocol=study_protocol,
+                date_columns=DATE_COLUMNS["subject"]
             )
 
         else:
