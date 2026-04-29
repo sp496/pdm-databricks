@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class Constants:
     """Constants used throughout the data curation process."""
-    STUDY_PROTOCOL_PATTERN = r'GS-US-\d+-\d+(?:-\d+_\d+)?' #r'GS-US-\d+-\d+'
+    STUDY_PROTOCOL_PATTERN = r'GS-US-\d+-\d+(?:-\d+_\d+)?|EDGE-Lung' # r'GS-US-\d+-\d+(?:-\d+_\d+)?'
     DATE_FOLDER_FORMAT = "%Y%m%d"
     INPUT_DATE_FORMATS = ['%d-%b-%Y', '%d %b %Y']  # Support multiple date formats
     OUTPUT_DATE_FORMAT = '%Y-%m-%d'
@@ -71,7 +71,7 @@ class DataCurator:
             'site':    self.site_mapping_df,
             'depot':   self.depot_mapping_df,
             'slsm':    self.slsm_mapping_df,
-            'clsm':    self.clsm_mapping_df,
+            'clsm':    self.clsm_mapping_df
         }
 
         logger.info("DataCurator initialized")
@@ -283,8 +283,7 @@ class DataCurator:
         self,
         visit_df: pd.DataFrame,
         subject_df: pd.DataFrame,
-        site_depot_df: pd.DataFrame,
-        drop_columns: Optional[List[str]] = None,
+        site_depot_df: pd.DataFrame
     ) -> pd.DataFrame:
         """
         Assemble a unified subject-visit DataFrame from three source DataFrames.
@@ -314,17 +313,22 @@ class DataCurator:
             .tail(1)
             .reset_index(drop=True)
         )
+
+        # Step 4: drop unused columns
+        drop_columns = ['Gilead Site Number']
+        if drop_columns:
+            latest = latest.drop(columns=[c for c in drop_columns if c in latest.columns])
+
         # Reformat Visit Date back to a string format the standard pipeline understands,
         # so the assembled DataFrame looks like any other raw subject DataFrame.
         latest['Visit Date'] = latest['Visit Date'].dt.strftime('%d-%b-%Y')
 
         # Step 2: join patient-level info from subject_df
-        subject_cols = ['Subject Number', 'Study Protocol', 'Date Randomized', 'Date Discontinued']
-        subject_dedup = (
-            subject_df[[c for c in subject_cols if c in subject_df.columns]]
-            .drop_duplicates(subset=['Subject Number', 'Study Protocol'])
-        )
-        latest = latest.merge(subject_dedup, how='left', on=['Subject Number', 'Study Protocol'])
+        subject_cols = ['Subject Number', 'Study Protocol', 'Date Randomized', 'Date Discontinued', 'Gilead Site Number']
+
+        subject_df = subject_df[[c for c in subject_cols if c in subject_df.columns]]
+
+        latest = latest.merge(subject_df, how='left', on=['Subject Number'])
 
         # Step 3: join site-to-depot mapping
         latest = latest.merge(
@@ -338,10 +342,6 @@ class DataCurator:
             .rename(columns={'Depot': 'Parent Depot'})
             .drop(columns=['Arcus Site'], errors='ignore')
         )
-
-        # Step 4: drop unused columns
-        if drop_columns:
-            latest = latest.drop(columns=[c for c in drop_columns if c in latest.columns])
 
         logger.info(f"Assembled subject-visit data: {latest.shape[0]} rows, {latest.shape[1]} columns")
         return latest
@@ -447,8 +447,7 @@ class DataCurator:
                      filename: str,
                      date_folder: str,
                      table_column_mapping: Dict[str, str],
-                     date_columns: List[str],
-                     study_protocol: str = None) -> Optional[pd.DataFrame]:
+                     date_columns: List[str]) -> Optional[pd.DataFrame]:
         """
         Process a single Subject Summary DataFrame.
 
@@ -458,16 +457,14 @@ class DataCurator:
             date_folder: Date folder string (e.g., "20251106")
             table_column_mapping: Dictionary to rename columns
             date_columns: List of date column names to convert
-            study_protocol: Optional override — skips filename extraction when provided
-                            (use for file types where protocol comes from the data itself)
 
         Returns:
             Processed DataFrame, or None if processing fails
         """
         try:
 
-            # Use provided study protocol or extract from filename
-            study_protocol = study_protocol or self.extract_study_protocol(filename)
+            # Extract Study Protocol from filename
+            study_protocol = self.extract_study_protocol(filename)
 
             # Standardize the dataframe
             if self.mapping_df_map[file_type] is not None:

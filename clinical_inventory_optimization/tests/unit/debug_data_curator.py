@@ -64,7 +64,7 @@ LOCAL_MAPPING = {
 # Sample CSV files — place in tests/fixtures/sample_csvs/ and update filenames below.
 # Set to None to skip that file type.
 LOCAL_CSV = {
-    "subject": r"../fixtures/sample_csvs/Gilead GS-US-409-5704_Subject Summary (Unblinded)Subject Summary2026-04-14-18-57-28.csv",
+    "subject": None, #r"../fixtures/sample_csvs/Gilead GS-US-409-5704_Subject Summary (Unblinded)Subject Summary2026-04-14-18-57-28.csv",
     "depot":   None,
     "site":    None,
     "slsm":    None,
@@ -73,9 +73,9 @@ LOCAL_CSV = {
 
 # Subject-visit type uses three input CSVs. Set any value to None to skip.
 LOCAL_SUBJECT_VISIT_CSV = {
-    "visit_summary":   r"../fixtures/sample_csvs/EDGE-Lung_SubjectVisitSummary.csv",
-    "subject_summary": r"../fixtures/sample_csvs/EDGE-Lung_SubjectSummary.csv",
-    "site_depot_map":  r"../fixtures/sample_csvs/Signant-Suvoda Headers.csv",
+    "visit_summary":   r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.csv",
+    "subject_summary": r"../fixtures/sample_csvs/EDGE-Lung_Subject SummarySubject Summary2026-04-28-13-56-25.csv",
+    "site_depot_map":  r"../fixtures/Site-Depot Mapping.csv",
 }
 
 # Date folder string — the extract date stamped on the source files
@@ -195,12 +195,6 @@ DATE_COLUMNS = {
     "clsm":  [],
 }
 
-SUBJECT_VISIT_DROP_COLUMNS = [
-    'Finished Lot', 'Expiration Date', 'Manufacturing Lot', 'PCI Item Number Lot',
-    'Drug Types Temporarily Held', 'Drug Types Permanently Discontinued', 'Assigned Drugs',
-    'Quemliclustat Dose Level', 'Drug Code', 'Quantity Dispensed', 'Gilead Site Number',
-]
-
 
 # ===========================================================================
 # Helper — load a mapping Excel file, returning None gracefully if missing
@@ -307,18 +301,13 @@ def main():
                 logger.info(f"  {label:16s}: {path}")
             logger.info(f"  Date             : {DATE_FOLDER}")
 
-            visit_df      = read_dynamic_csv(sv_paths["visit_summary"])
-            subject_df    = read_dynamic_csv(sv_paths["subject_summary"])
+            visit_df = read_dynamic_csv(sv_paths["visit_summary"])
+            subject_df = read_dynamic_csv(sv_paths["subject_summary"])
             site_depot_df = read_dynamic_csv(sv_paths["site_depot_map"])
 
             assembled_df = curator.assemble_subject_visit_data(
-                visit_df, subject_df, site_depot_df,
-                drop_columns=SUBJECT_VISIT_DROP_COLUMNS,
+                visit_df, subject_df, site_depot_df
             )
-
-            # Study protocol comes from the data, not the filename
-            study_protocol = assembled_df['Study Protocol'].dropna().iloc[0]
-            assembled_df = assembled_df.drop(columns=['Study Protocol'])
 
             source_file = os.path.basename(sv_paths["visit_summary"])
             result_df = curator.process_data(
@@ -327,8 +316,7 @@ def main():
                 filename=source_file,
                 date_folder=DATE_FOLDER,
                 table_column_mapping=COLUMN_MAPPING["subject"],
-                date_columns=DATE_COLUMNS["subject"],
-                study_protocol=study_protocol,
+                date_columns=DATE_COLUMNS["subject"]
             )
 
             if result_df is not None:
