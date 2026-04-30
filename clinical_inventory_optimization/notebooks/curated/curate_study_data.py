@@ -104,6 +104,32 @@ def read_csv_with_dynamic_header(dbfs_path: str, max_rows: int = 10) -> pd.DataF
     raise ValueError(f"No fully populated header line found in {dbfs_path}")
 
 
+def read_excel_with_dynamic_header(dbfs_path: str, max_rows: int = 10) -> pd.DataFrame:
+    """
+    Read Excel file from DBFS with dynamic header detection.
+
+    Args:
+        dbfs_path: DBFS path (e.g., "dbfs:/mnt/...")
+        max_rows: Maximum rows to search for header
+
+    Returns:
+        pandas DataFrame
+    """
+    local_path = dbfs_path.replace("dbfs:", "/dbfs")
+
+    logger.info(f"Reading Excel: {dbfs_path}")
+
+    preview = pd.read_excel(local_path, header=None, nrows=max_rows, dtype=str)
+    for i, row in preview.iterrows():
+        values = [v for v in row if pd.notna(v) and str(v).strip()]
+        if len(values) == len(row) and len(values) > 1:
+            df = pd.read_excel(local_path, header=i, dtype=str)
+            logger.info(f"Loaded Excel: {df.shape[0]} rows, {df.shape[1]} columns")
+            return df
+
+    raise ValueError(f"No fully populated header line found in {dbfs_path}")
+
+
 def load_csv_files(file_list: List[Tuple[str, str]]) -> List[Tuple[pd.DataFrame, str]]:
     """
     Load multiple CSV files into DataFrames.
@@ -255,8 +281,8 @@ def find_latest_summary_files_by_filename_timestamp(date_folder_path):
     """
     per_study_files = {}
 
-    # Regex pattern to extract timestamp from filename: YYYY-MM-DD-HH-MM-SS before .csv
-    timestamp_pattern = r'(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})\.csv$'
+    # Regex pattern to extract timestamp from filename: YYYY-MM-DD-HH-MM-SS before .csv/.xlsx
+    timestamp_pattern = r'(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})\.(csv|xlsx)$'
 
     try:
         # Get all study subfolders
@@ -281,7 +307,7 @@ def find_latest_summary_files_by_filename_timestamp(date_folder_path):
                     file_name = file.name
                     file_name_lower = file_name.lower()
 
-                    if not file_name_lower.endswith('.csv'):
+                    if not (file_name_lower.endswith('.csv') or file_name_lower.endswith('.xlsx')):
                         continue
 
                     # Extract timestamp from filename
@@ -777,23 +803,23 @@ for date_folder in selected_folders:
         if 'subject_visit' in files:
             logger.info(f"\n🔬 Assembly mode for study: {study_name}")
             visit_path, visit_name = files['subject_visit']
-            visit_df = read_csv_with_dynamic_header(visit_path)
+            visit_df = read_excel_with_dynamic_header(visit_path)
 
             if 'subject' in files:
                 subject_path, _ = files['subject']
-                subject_df = read_csv_with_dynamic_header(subject_path)
+                subject_df = read_excel_with_dynamic_header(subject_path)
                 assembled = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
                 accumulated_files['subject'].append((assembled, visit_name))
 
             if 'depot' in files:
                 depot_path, depot_name = files['depot']
-                depot_df = read_csv_with_dynamic_header(depot_path)
+                depot_df = read_excel_with_dynamic_header(depot_path)
                 assembled = curator.assemble_depot_data(depot_df, site_depot_df)
                 accumulated_files['depot'].append((assembled, depot_name))
 
             if 'site' in files:
                 site_path, site_name = files['site']
-                site_df = read_csv_with_dynamic_header(site_path)
+                site_df = read_excel_with_dynamic_header(site_path)
                 assembled = curator.assemble_site_data(site_df, site_depot_df)
                 accumulated_files['site'].append((assembled, site_name))
 

@@ -37,7 +37,7 @@ for _p in [_PROJECT_ROOT, _REPO_ROOT]:
 # ---------------------------------------------------------------------------
 import logging
 import pandas as pd
-from lib.curated.data_curator import DataCurator, load_excel_mapping, read_dynamic_csv
+from lib.curated.data_curator import DataCurator, load_excel_mapping, read_dynamic_csv, read_excel_with_dynamic_header
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -69,11 +69,11 @@ LOCAL_MAPPING = {
 # is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
     "subject":       None,
-    "depot":         r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsDepot2026-04-28-13-56-58.csv",
-    "site":          r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsSite2026-04-28-13-57-20.csv",
+    "depot":         r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsDepot2026-04-28-13-56-58.xlsx",
+    "site":          r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsSite2026-04-28-13-57-20.xlsx",
     "slsm":          None,
     "clsm":          None,
-    "subject_visit": r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.csv",
+    "subject_visit": r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.xlsx",
 }
 
 # Date folder string — the extract date stamped on the source files
@@ -280,8 +280,8 @@ def main():
             logger.info(f"  visit_summary   : {visit_path}")
             logger.info(f"  site_depot_map  : {site_depot_path}")
 
-            visit_df      = read_dynamic_csv(visit_path)
-            subject_df    = read_dynamic_csv(csv_path)
+            visit_df      = read_excel_with_dynamic_header(visit_path)
+            subject_df    = read_excel_with_dynamic_header(csv_path)
             site_depot_df = pd.read_excel(site_depot_path, dtype=str)
 
             assembled_df = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
@@ -307,7 +307,7 @@ def main():
             logger.info(f"  depot_inventory : {csv_path}")
             logger.info(f"  site_depot_map  : {site_depot_path}")
 
-            depot_df = read_dynamic_csv(csv_path)
+            depot_df = read_excel_with_dynamic_header(csv_path)
             site_depot_df = pd.read_excel(site_depot_path, dtype=str)
             assembled_depot_df = curator.assemble_depot_data(depot_df, site_depot_df)
 
@@ -332,7 +332,7 @@ def main():
             logger.info(f"  site_inventory : {csv_path}")
             logger.info(f"  site_depot_map : {site_depot_path}")
 
-            site_df = read_dynamic_csv(csv_path)
+            site_df = read_excel_with_dynamic_header(csv_path)
             site_depot_df = pd.read_excel(site_depot_path, dtype=str)
 
             assembled_site_df = curator.assemble_site_data(site_df, site_depot_df)

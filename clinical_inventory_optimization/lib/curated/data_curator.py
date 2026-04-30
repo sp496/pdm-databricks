@@ -701,6 +701,37 @@ def read_dynamic_csv(filepath: str, max_rows: int = 10) -> pd.DataFrame:
     raise ValueError(f"No fully populated header line found in {filepath}")
 
 
+def read_excel_with_dynamic_header(filepath: str, max_rows: int = 10) -> pd.DataFrame:
+    """
+    Read Excel file with dynamic header row detection.
+
+    Finds the first row where all cells are non-empty and uses it as the header.
+    This is a convenience function for local testing.
+
+    Args:
+        filepath: Path to the Excel file
+        max_rows: Maximum number of rows to search for header
+
+    Returns:
+        DataFrame with data
+
+    Raises:
+        FileNotFoundError: If file doesn't exist
+        ValueError: If no valid header found
+    """
+    logger.info(f"Reading Excel with dynamic header detection: {filepath}")
+
+    preview = pd.read_excel(filepath, header=None, nrows=max_rows, dtype=str)
+    for i, row in preview.iterrows():
+        values = [v for v in row if pd.notna(v) and str(v).strip()]
+        if len(values) == len(row) and len(values) > 1:
+            df = pd.read_excel(filepath, header=i, dtype=str)
+            logger.info(f"Loaded Excel: {df.shape[0]} rows, {df.shape[1]} columns")
+            return df
+
+    raise ValueError(f"No fully populated header line found in {filepath}")
+
+
 def load_excel_mapping(excel_path: str, sheet_name: str = 'Header') -> pd.DataFrame | None:
     """
     Load column mapping from an Excel file.
