@@ -133,10 +133,12 @@ for folder in selected_folders:
     for file in files:
         rel_path = file[len(src_base_mount):].lstrip("/") if file.startswith(
             src_base_mount) else f"{folder}/{os.path.basename(file)}"
-        out_mount = f"{tgt_bkt_mount_point}/{tgt_data_dir}/{rel_path}"
+        out_stem = f"{tgt_bkt_mount_point}/{tgt_data_dir}/{rel_path}"
+        if out_stem.lower().endswith(".enc"):
+            out_stem = out_stem[:-4]
 
-        dbutils.fs.mkdirs(os.path.dirname(out_mount))
-        decryptor.decrypt_file(f"/dbfs{file}", f"/dbfs{out_mount}")
+        dbutils.fs.mkdirs(os.path.dirname(out_stem))
+        decryptor.decrypt_file(f"/dbfs{file}", f"/dbfs{out_stem}")
 
     print(f"✅ Completed folder: {folder}")
 
