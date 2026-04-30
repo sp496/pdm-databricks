@@ -101,17 +101,22 @@ class AESDecryptor:
                 pass
             return "unknown"
 
-    def decrypt_file(self, input_path, output_path):
+    def decrypt_file(self, input_path, output_directory=None):
         """
-        Decrypt a file from input_path and save to output_path.
+        Decrypt a file and save the result to output_directory.
+
+        The output filename is derived from the input filename by stripping
+        .enc and appending the detected extension (xlsx, xls, or csv).
 
         Args:
-            input_path (str): Path to encrypted file
-            output_path (str): Path to save decrypted file
+            input_path (str): Path to the encrypted file
+            output_directory (str | None): Directory to write the decrypted file.
+                Defaults to the same directory as input_path.
 
         Returns:
-            dict: Decryption metadata
+            dict: Decryption metadata including the output_path used
         """
+        import os
         try:
             # Read encrypted file
             with open(input_path, "rb") as f:
@@ -154,6 +159,19 @@ class AESDecryptor:
             if self.debug:
                 print(f"✅ Detected file type: {file_type}")
 
+            # Build output filename: strip .enc from input basename, add detected extension
+            ext_map = {"xlsx": ".xlsx", "xls": ".xls", "csv": ".csv"}
+            basename = os.path.basename(input_path)
+            if basename.lower().endswith(".enc"):
+                basename = basename[:-4]
+            stem, _ = os.path.splitext(basename)
+            ext = ext_map.get(file_type, os.path.splitext(basename)[1] or "")
+            out_filename = stem + ext
+
+            # Resolve output directory
+            directory = output_directory if output_directory is not None else os.path.dirname(input_path)
+            output_path = os.path.join(directory, out_filename)
+
             # Save decrypted file
             with open(output_path, "wb") as f:
                 f.write(final_data)
@@ -165,6 +183,7 @@ class AESDecryptor:
                 "mode": mode,
                 "base64_decoded": base64_decoded,
                 "file_type": file_type,
+                "output_path": output_path,
                 "output_size": len(final_data)
             }
 
@@ -213,9 +232,9 @@ if __name__ == "__main__":
 
     decryptor = AESDecryptor(key, debug=False)
 
+    # output_path is optional — extension is auto-detected from decrypted content
     result = decryptor.decrypt_file(
-        "GS-US-592-6173 CustomReport4_SubjectSummary_04-Sep-2025_100250_extcsv.enc",
-        "GS-US-592-6173 CustomReport4_SubjectSummary_04-Sep-2025_100250_extcsv.csv"
+        "GS-US-592-6173 CustomReport4_SubjectSummary_04-Sep-2025_100250_extcsv.enc"
     )
 
     print(f"\nDecryption result: {result}")
