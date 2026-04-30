@@ -349,8 +349,8 @@ class DataCurator:
         }
 
         groupby_cols = [
-            'Arcus Site Number', 'Gilead Site Number', 'PI Last Name', 'Drug Description', 'Drug Code',
-            'Finished Lot', 'Expiration Date', 'Country', 'Parent Depot'
+            'Arcus Site Number', 'Gilead Site Number', 'PI Last Name', 'PCI Item Number Lot', 'Drug Description',
+            'Drug Code', 'Finished Lot', 'Expiration Date', 'Country', 'Parent Depot'
         ]
 
         quantity_columns = [
@@ -425,7 +425,7 @@ class DataCurator:
         }
 
         groupby_cols = [
-            'Depot Number', 'Depot Name', 'Drug Description', 'Drug Code',
+            'Depot Number', 'Depot Name', 'Drug Description', 'Drug Code', 'PCI Item Number Lot',
             'Finished Lot', 'Expiration Date', 'Country',
         ]
 

@@ -69,7 +69,7 @@ LOCAL_MAPPING = {
 LOCAL_CSV = {
     "subject":       None,
     "depot":         r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsDepot2026-04-28-13-56-58.csv",
-    "site":          None,
+    "site":          r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsSite2026-04-28-13-57-20.csv",
     "slsm":          None,
     "clsm":          None,
     "subject_visit": r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.csv",
