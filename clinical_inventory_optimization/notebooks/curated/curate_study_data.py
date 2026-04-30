@@ -146,7 +146,7 @@ s_header_mapping_df = load_excel_mapping(s_header_mapping_file_path_full)
 
 # Site-Depot mapping (used by EDGE-Lung assembly steps)
 site_depot_mapping_file_path_full = f"/dbfs{os.path.join(mapping_bkt_mount_point, site_depot_mapping_file_path)}"
-site_depot_df = read_csv_with_dynamic_header(site_depot_mapping_file_path_full)
+site_depot_df = pd.read_excel(site_depot_mapping_file_path_full, dtype=str)
 logger.info(f"Site-Depot mapping loaded: {site_depot_df.shape}")
 
 # Initialize DataCurator with mapping

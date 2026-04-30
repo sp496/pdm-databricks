@@ -36,6 +36,7 @@ for _p in [_PROJECT_ROOT, _REPO_ROOT]:
 # Imports (no Databricks / pyspark required)
 # ---------------------------------------------------------------------------
 import logging
+import pandas as pd
 from lib.curated.data_curator import DataCurator, load_excel_mapping, read_dynamic_csv
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -59,7 +60,7 @@ LOCAL_MAPPING = {
     "site":       r"../fixtures/Site Inventory Header Mapping.xlsx",
     "slsm":       None,
     "clsm":       None,
-    "site_depot": r"../fixtures/Site-Depot Mapping.csv",
+    "site_depot": r"../fixtures/Site-Depot Mapping.xlsx",
 }
 
 # Sample CSV files — place in tests/fixtures/sample_csvs/ and update filenames below.
@@ -281,7 +282,7 @@ def main():
 
             visit_df      = read_dynamic_csv(visit_path)
             subject_df    = read_dynamic_csv(csv_path)
-            site_depot_df = read_dynamic_csv(site_depot_path)
+            site_depot_df = pd.read_excel(site_depot_path, dtype=str)
 
             assembled_df = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
 
@@ -307,7 +308,7 @@ def main():
             logger.info(f"  site_depot_map  : {site_depot_path}")
 
             depot_df = read_dynamic_csv(csv_path)
-            site_depot_df = read_dynamic_csv(site_depot_path)
+            site_depot_df = pd.read_excel(site_depot_path, dtype=str)
             assembled_depot_df = curator.assemble_depot_data(depot_df, site_depot_df)
 
             result_df = curator.process_data(
@@ -332,7 +333,7 @@ def main():
             logger.info(f"  site_depot_map : {site_depot_path}")
 
             site_df = read_dynamic_csv(csv_path)
-            site_depot_df = read_dynamic_csv(site_depot_path)
+            site_depot_df = pd.read_excel(site_depot_path, dtype=str)
 
             assembled_site_df = curator.assemble_site_data(site_df, site_depot_df)
 
