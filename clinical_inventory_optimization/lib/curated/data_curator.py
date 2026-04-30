@@ -419,7 +419,6 @@ class DataCurator:
             'In Transit':  'Quantity Study Drug - Requested',
             'Intact':      'Quantity Study Drug - Available',
             'Quarantined': 'Quantity Study Drug - Quarantined',
-            'Assigned':    'Quantity Study Drug - Assigned',
             'Damaged':     'Quantity Study Drug - Damaged',
         }
 
@@ -429,8 +428,7 @@ class DataCurator:
         ]
 
         quantity_columns = [
-            'Quantity Study Drug - Requested', 'Quantity Study Drug - Available',
-            'Quantity Study Drug - Assigned',  'Quantity Study Drug - Lost',
+            'Quantity Study Drug - Requested', 'Quantity Study Drug - Available',  'Quantity Study Drug - Lost',
             'Quantity Study Drug - Damaged',   'Quantity Study Drug - Quarantined',
             'Quantity Study Drug - Rejected',  'Quantity Study Drug - Do Not Ship',
             'Quantity Study Drug - Expired',   'Quantity Study Drug - Packaged (Unavailable)',
@@ -451,7 +449,7 @@ class DataCurator:
                 row_dict[q_col] = 0
             for _, row in group.iterrows():
                 drug_status = row['Drug Status']
-                quantity    = row['Quantity (Depot Units)']
+                quantity = row['Quantity (Depot Units)']
                 if drug_status in status_mapping:
                     row_dict[status_mapping[drug_status]] += quantity
             row_dict['Quantity Study Drug - Total'] = sum(
