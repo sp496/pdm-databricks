@@ -405,12 +405,14 @@ class DataCurator:
     def assemble_depot_data(
         self,
         depot_df: pd.DataFrame,
+        site_depot_df: pd.DataFrame,
     ) -> pd.DataFrame:
         """
         Preprocess depot inventory data.
 
-        1. Drop rows missing depot, quantity, or drug status; convert quantity to int.
-        2. Pivot Drug Status into quantity columns — one output row per depot/lot grain.
+        1. Join site_depot_df (deduplicated) to get Country per depot.
+        2. Drop rows missing depot, quantity, or drug status; convert quantity to int.
+        3. Pivot Drug Status into quantity columns — one output row per depot/lot grain.
 
         Returns:
             Transformed DataFrame with one row per depot/lot combination.
@@ -424,7 +426,7 @@ class DataCurator:
 
         groupby_cols = [
             'Depot Number', 'Depot Name', 'Drug Description', 'Drug Code',
-            'Finished Lot', 'Expiration Date',
+            'Finished Lot', 'Expiration Date', 'Country',
         ]
 
         quantity_columns = [
@@ -435,7 +437,18 @@ class DataCurator:
             'Quantity Study Drug - Total',
         ]
 
-        df = depot_df.dropna(subset=['Depot Number', 'Quantity (Depot Units)', 'Drug Status']).copy()
+        depot_country = (
+            site_depot_df[['Depot', 'Depot Country']]
+            .drop_duplicates(subset=['Depot'])
+            .rename(columns={'Depot Country': 'Country'})
+        )
+        df = (
+            depot_df
+            .merge(depot_country, how='left', left_on='Depot Number', right_on='Depot')
+            .drop(columns=['Depot'], errors='ignore')
+        )
+
+        df = df.dropna(subset=['Depot Number', 'Quantity (Depot Units)', 'Drug Status']).copy()
         df['Quantity (Depot Units)'] = (
             pd.to_numeric(df['Quantity (Depot Units)'], errors='coerce')
             .fillna(0)

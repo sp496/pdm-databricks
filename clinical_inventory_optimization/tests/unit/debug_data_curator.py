@@ -296,10 +296,19 @@ def main():
 
         # Depot inventory: pivot Drug Status into quantity columns when EDGE-Lung mode is active
         elif file_type == "depot" and LOCAL_CSV.get("subject_visit"):
+            site_depot_path = LOCAL_MAPPING.get("site_depot")
+
+            missing = [p for p in [site_depot_path] if not p or not os.path.exists(p)]
+            if missing:
+                logger.warning(f"  Assembly file(s) not found — skipping: {missing}")
+                continue
+
             logger.info(f"  depot_inventory : {csv_path}")
+            logger.info(f"  site_depot_map  : {site_depot_path}")
 
             depot_df = read_dynamic_csv(csv_path)
-            assembled_depot_df = curator.assemble_depot_data(depot_df)
+            site_depot_df = read_dynamic_csv(site_depot_path)
+            assembled_depot_df = curator.assemble_depot_data(depot_df, site_depot_df)
 
             result_df = curator.process_data(
                 assembled_depot_df,
