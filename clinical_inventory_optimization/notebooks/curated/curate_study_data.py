@@ -50,6 +50,7 @@ mapping_bkt_mount_point = config["mapping_bkt_mount_point"]
 ss_header_mapping_file_path = config["ss_header_mapping_file_path"].format(env=resolved_env)
 d_header_mapping_file_path = config["d_header_mapping_file_path"].format(env=resolved_env)
 s_header_mapping_file_path = config["s_header_mapping_file_path"].format(env=resolved_env)
+site_depot_mapping_file_path = config["site_depot_mapping_file_path"].format(env=resolved_env)
 
 treatment_group_mapping_file_path = config["treatment_group_mapping_file_path"].format(env=resolved_env)
 
@@ -142,6 +143,11 @@ d_header_mapping_df = load_excel_mapping(d_header_mapping_file_path_full)
 
 s_header_mapping_file_path_full = f"/dbfs{os.path.join(mapping_bkt_mount_point, s_header_mapping_file_path)}"
 s_header_mapping_df = load_excel_mapping(s_header_mapping_file_path_full)
+
+# Site-Depot mapping (used by EDGE-Lung assembly steps)
+site_depot_mapping_file_path_full = f"/dbfs{os.path.join(mapping_bkt_mount_point, site_depot_mapping_file_path)}"
+site_depot_df = read_csv_with_dynamic_header(site_depot_mapping_file_path_full)
+logger.info(f"Site-Depot mapping loaded: {site_depot_df.shape}")
 
 # Initialize DataCurator with mapping
 curator = DataCurator(subject_mapping_df=ss_header_mapping_df, depot_mapping_df=d_header_mapping_df, site_mapping_df=s_header_mapping_df)
@@ -243,17 +249,11 @@ def find_latest_summary_files_by_filename_timestamp(date_folder_path):
         date_folder_path (str): Path to the date folder
 
     Returns:
-        dict: Dictionary with keys 'subject', 'site', and 'depot',
-              each containing a list of tuples (file_path, file_name)
-              representing the latest file per study folder.
+        dict: {study_folder_name: {file_type: (file_path, file_name)}}
+              file_type is one of: subject, site, depot, slsm, clsm, subject_visit.
+              Only categories with a matching file are present in the inner dict.
     """
-    summary_files = {
-        'subject': [],
-        'site': [],
-        'depot': [],
-        'slsm': [],
-        'clsm': []
-    }
+    per_study_files = {}
 
     # Regex pattern to extract timestamp from filename: YYYY-MM-DD-HH-MM-SS before .csv
     timestamp_pattern = r'(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})\.csv$'
@@ -266,20 +266,14 @@ def find_latest_summary_files_by_filename_timestamp(date_folder_path):
             subfolder_path = subfolder.path
 
             folder_name = subfolder_path.rstrip('/').split('/')[-1]
- 
+
             if ALLOWED_STUDIES and folder_name not in ALLOWED_STUDIES:
                 print(f"⏩ Skipping unapproved folder: {folder_name}")
                 continue
 
             print(f"\n📁 Scanning study folder: {subfolder_path}")
 
-            latest_in_study = {
-                'subject': None,
-                'site': None,
-                'depot': None,
-                'slsm': None,
-                'clsm': None
-            }
+            latest_in_study = {}
 
             try:
                 files = dbutils.fs.ls(subfolder_path)
@@ -304,9 +298,11 @@ def find_latest_summary_files_by_filename_timestamp(date_folder_path):
                         print(f"   ⚠️ Could not parse timestamp '{timestamp_str}' from file {file_name}: {e}")
                         continue
 
-                    # Determine category
+                    # Determine category — check subject_visit before subject_summary
                     category = None
-                    if ('subject summary' in file_name_lower) or ('participant summary' in file_name_lower):
+                    if 'subject visit' in file_name_lower:
+                        category = 'subject_visit'
+                    elif ('subject summary' in file_name_lower) or ('participant summary' in file_name_lower):
                         category = 'subject'
                     elif 'site' in file_name_lower and 'inventory' in file_name_lower:
                         category = 'site'
@@ -318,7 +314,7 @@ def find_latest_summary_files_by_filename_timestamp(date_folder_path):
                         category = 'clsm'
 
                     if category:
-                        current_entry = latest_in_study[category]
+                        current_entry = latest_in_study.get(category)
                         if (
                             current_entry is None or
                             file_datetime > current_entry['datetime']
@@ -329,11 +325,13 @@ def find_latest_summary_files_by_filename_timestamp(date_folder_path):
                                 'datetime': file_datetime
                             }
 
-                # Add the latest file from this subfolder to overall list
-                for category, info in latest_in_study.items():
-                    if info:
-                        summary_files[category].append((info['path'], info['name']))
-                        print(f"   ✅ Latest {category.title()} → {info['name']} (timestamp: {info['datetime']})")
+                if latest_in_study:
+                    per_study_files[folder_name] = {
+                        category: (info['path'], info['name'])
+                        for category, info in latest_in_study.items()
+                    }
+                    for category, info in latest_in_study.items():
+                        print(f"   ✅ Latest {category} → {info['name']} (timestamp: {info['datetime']})")
 
             except Exception as e:
                 print(f"   ⚠️ Error scanning subfolder {subfolder_path}: {str(e)}")
@@ -341,7 +339,7 @@ def find_latest_summary_files_by_filename_timestamp(date_folder_path):
     except Exception as e:
         print(f"❌ Error scanning date folder {date_folder_path}: {str(e)}")
 
-    return summary_files
+    return per_study_files
 
 # COMMAND ----------
 
@@ -720,13 +718,18 @@ def cast_and_write_to_delta(pandas_df, table_name: str, date_folder: str, schema
 # COMMAND ----------
 
 def process_file_type(file_type, files, date_folder, curator, label):
+    """
+    Args:
+        files: list of (DataFrame, filename) tuples — DataFrames are pre-loaded
+               (and pre-assembled, for EDGE-Lung studies) by the caller.
+    """
     if not files:
         return
     logger.info(f"\n→ Processing {len(files)} {label} files")
     config = MAPPING_CONFIG[file_type]
     processed_dfs = [
         processed_df
-        for df, filename in load_csv_files(files)
+        for df, filename in files
         if (processed_df := curator.process_data(
             df=df,
             file_type=file_type,
@@ -762,7 +765,46 @@ for date_folder in selected_folders:
 
     date_folder_path = f"{raw_data_path}/{date_folder}"
 
-    summary_files = find_latest_summary_files_by_filename_timestamp(date_folder_path)
+    per_study_files = find_latest_summary_files_by_filename_timestamp(date_folder_path)
+
+    # Accumulate (df, filename) tuples per file_type across all studies in this date folder.
+    # For studies that have a subject_visit file, run the EDGE-Lung assembly steps first;
+    # for everything else, just load the CSV. After this loop the structure is identical
+    # to the original per-file-type list, so process_file_type works unchanged.
+    accumulated_files = {ft: [] for ft in FILE_TYPE_LABELS}
+
+    for study_name, files in per_study_files.items():
+        if 'subject_visit' in files:
+            logger.info(f"\n🔬 Assembly mode for study: {study_name}")
+            visit_path, visit_name = files['subject_visit']
+            visit_df = read_csv_with_dynamic_header(visit_path)
+
+            if 'subject' in files:
+                subject_path, _ = files['subject']
+                subject_df = read_csv_with_dynamic_header(subject_path)
+                assembled = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
+                accumulated_files['subject'].append((assembled, visit_name))
+
+            if 'depot' in files:
+                depot_path, depot_name = files['depot']
+                depot_df = read_csv_with_dynamic_header(depot_path)
+                assembled = curator.assemble_depot_data(depot_df, site_depot_df)
+                accumulated_files['depot'].append((assembled, depot_name))
+
+            if 'site' in files:
+                site_path, site_name = files['site']
+                site_df = read_csv_with_dynamic_header(site_path)
+                assembled = curator.assemble_site_data(site_df, site_depot_df)
+                accumulated_files['site'].append((assembled, site_name))
+
+            for ft in ('slsm', 'clsm'):
+                if ft in files:
+                    path, name = files[ft]
+                    accumulated_files[ft].append((read_csv_with_dynamic_header(path), name))
+        else:
+            for ft, (path, name) in files.items():
+                if ft in accumulated_files:
+                    accumulated_files[ft].append((read_csv_with_dynamic_header(path), name))
 
     for file_type, label in FILE_TYPE_LABELS.items():
-        process_file_type(file_type, summary_files[file_type], date_folder, curator, label)
+        process_file_type(file_type, accumulated_files[file_type], date_folder, curator, label)
