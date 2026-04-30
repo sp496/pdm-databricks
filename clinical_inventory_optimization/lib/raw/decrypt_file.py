@@ -173,8 +173,9 @@ class AESDecryptor:
                 print(f"✅ Detected file type: {file_type}")
 
             # Resolve output path
-            if output_path is None:
-                output_path = self._derive_output_path(input_path, file_type)
+            if output_path is None or output_path.lower().endswith(".enc"):
+                base = output_path if output_path is not None else input_path
+                output_path = self._derive_output_path(base, file_type)
 
             # Save decrypted file
             with open(output_path, "wb") as f:

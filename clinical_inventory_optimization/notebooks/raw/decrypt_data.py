@@ -133,7 +133,7 @@ for folder in selected_folders:
     for file in files:
         rel_path = file[len(src_base_mount):].lstrip("/") if file.startswith(
             src_base_mount) else f"{folder}/{os.path.basename(file)}"
-        out_mount = f"{tgt_bkt_mount_point}/{tgt_data_dir}/{rel_path}".replace(".enc", ".csv")
+        out_mount = f"{tgt_bkt_mount_point}/{tgt_data_dir}/{rel_path}"
 
         dbutils.fs.mkdirs(os.path.dirname(out_mount))
         decryptor.decrypt_file(f"/dbfs{file}", f"/dbfs{out_mount}")
