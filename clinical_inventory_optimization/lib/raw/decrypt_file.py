@@ -101,35 +101,22 @@ class AESDecryptor:
                 pass
             return "unknown"
 
-    def _derive_output_path(self, input_path, file_type):
+    def decrypt_file(self, input_path, output_directory=None):
         """
-        Derive output path from input path by stripping .enc and appending
-        the correct extension based on detected file type.
-        """
-        import os
-        base = input_path
-        if base.lower().endswith(".enc"):
-            base = base[:-4]
-        root, _ = os.path.splitext(base)
-        ext_map = {"xlsx": ".xlsx", "xls": ".xls", "csv": ".csv"}
-        ext = ext_map.get(file_type, os.path.splitext(base)[1] or "")
-        return root + ext
+        Decrypt a file and save the result to output_directory.
 
-    def decrypt_file(self, input_path, output_path=None):
-        """
-        Decrypt a file from input_path and save to output_path.
-
-        If output_path is not provided, it is derived from input_path by
-        stripping the .enc extension and using the detected file type
-        (xlsx, xls, or csv) to set the correct extension.
+        The output filename is derived from the input filename by stripping
+        .enc and appending the detected extension (xlsx, xls, or csv).
 
         Args:
-            input_path (str): Path to encrypted file
-            output_path (str | None): Path to save decrypted file; auto-derived if omitted
+            input_path (str): Path to the encrypted file
+            output_directory (str | None): Directory to write the decrypted file.
+                Defaults to the same directory as input_path.
 
         Returns:
-            dict: Decryption metadata
+            dict: Decryption metadata including the output_path used
         """
+        import os
         try:
             # Read encrypted file
             with open(input_path, "rb") as f:
@@ -172,12 +159,18 @@ class AESDecryptor:
             if self.debug:
                 print(f"✅ Detected file type: {file_type}")
 
-            # Resolve output path: auto-derive when None or no extension given
-            import os as _os
-            if output_path is None:
-                output_path = self._derive_output_path(input_path, file_type)
-            elif not _os.path.splitext(output_path)[1]:
-                output_path = self._derive_output_path(output_path, file_type)
+            # Build output filename: strip .enc from input basename, add detected extension
+            ext_map = {"xlsx": ".xlsx", "xls": ".xls", "csv": ".csv"}
+            basename = os.path.basename(input_path)
+            if basename.lower().endswith(".enc"):
+                basename = basename[:-4]
+            stem, _ = os.path.splitext(basename)
+            ext = ext_map.get(file_type, os.path.splitext(basename)[1] or "")
+            out_filename = stem + ext
+
+            # Resolve output directory
+            directory = output_directory if output_directory is not None else os.path.dirname(input_path)
+            output_path = os.path.join(directory, out_filename)
 
             # Save decrypted file
             with open(output_path, "wb") as f:
@@ -190,6 +183,7 @@ class AESDecryptor:
                 "mode": mode,
                 "base64_decoded": base64_decoded,
                 "file_type": file_type,
+                "output_path": output_path,
                 "output_size": len(final_data)
             }
 

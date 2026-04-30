@@ -131,14 +131,14 @@ for folder in selected_folders:
     print(f"🔹 Decrypting {len(files)} files in {folder_path}...")
 
     for file in files:
-        rel_path = file[len(src_base_mount):].lstrip("/") if file.startswith(
-            src_base_mount) else f"{folder}/{os.path.basename(file)}"
-        out_stem = f"{tgt_bkt_mount_point}/{tgt_data_dir}/{rel_path}"
-        if out_stem.lower().endswith(".enc"):
-            out_stem = out_stem[:-4]
+        rel_dir = os.path.dirname(
+            file[len(src_base_mount):].lstrip("/") if file.startswith(src_base_mount)
+            else f"{folder}/{os.path.basename(file)}"
+        )
+        out_dir = f"{tgt_bkt_mount_point}/{tgt_data_dir}/{rel_dir}"
 
-        dbutils.fs.mkdirs(os.path.dirname(out_stem))
-        decryptor.decrypt_file(f"/dbfs{file}", f"/dbfs{out_stem}")
+        dbutils.fs.mkdirs(out_dir)
+        decryptor.decrypt_file(f"/dbfs{file}", f"/dbfs{out_dir}")
 
     print(f"✅ Completed folder: {folder}")
 
