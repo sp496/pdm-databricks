@@ -101,13 +101,31 @@ class AESDecryptor:
                 pass
             return "unknown"
 
-    def decrypt_file(self, input_path, output_path):
+    def _derive_output_path(self, input_path, file_type):
+        """
+        Derive output path from input path by stripping .enc and appending
+        the correct extension based on detected file type.
+        """
+        import os
+        base = input_path
+        if base.lower().endswith(".enc"):
+            base = base[:-4]
+        root, _ = os.path.splitext(base)
+        ext_map = {"xlsx": ".xlsx", "xls": ".xls", "csv": ".csv"}
+        ext = ext_map.get(file_type, os.path.splitext(base)[1] or "")
+        return root + ext
+
+    def decrypt_file(self, input_path, output_path=None):
         """
         Decrypt a file from input_path and save to output_path.
 
+        If output_path is not provided, it is derived from input_path by
+        stripping the .enc extension and using the detected file type
+        (xlsx, xls, or csv) to set the correct extension.
+
         Args:
             input_path (str): Path to encrypted file
-            output_path (str): Path to save decrypted file
+            output_path (str | None): Path to save decrypted file; auto-derived if omitted
 
         Returns:
             dict: Decryption metadata
@@ -153,6 +171,10 @@ class AESDecryptor:
             file_type = self._detect_file_type(final_data)
             if self.debug:
                 print(f"✅ Detected file type: {file_type}")
+
+            # Resolve output path
+            if output_path is None:
+                output_path = self._derive_output_path(input_path, file_type)
 
             # Save decrypted file
             with open(output_path, "wb") as f:
@@ -213,9 +235,9 @@ if __name__ == "__main__":
 
     decryptor = AESDecryptor(key, debug=False)
 
+    # output_path is optional — extension is auto-detected from decrypted content
     result = decryptor.decrypt_file(
-        "GS-US-592-6173 CustomReport4_SubjectSummary_04-Sep-2025_100250_extcsv.enc",
-        "GS-US-592-6173 CustomReport4_SubjectSummary_04-Sep-2025_100250_extcsv.csv"
+        "GS-US-592-6173 CustomReport4_SubjectSummary_04-Sep-2025_100250_extcsv.enc"
     )
 
     print(f"\nDecryption result: {result}")
