@@ -138,7 +138,19 @@ for folder in selected_folders:
         out_dir = f"{tgt_bkt_mount_point}/{tgt_data_dir}/{rel_dir}"
 
         dbutils.fs.mkdirs(out_dir)
-        decryptor.decrypt_file(f"/dbfs{file}", f"/dbfs{out_dir}")
+
+        # Use dbutils.fs.open for both read and write to avoid FUSE mount issues
+        # with special characters (spaces, parentheses) in file paths.
+        with dbutils.fs.open(file, "rb") as fh:
+            encrypted_bytes = fh.read()
+
+        decrypted_bytes, out_filename = decryptor.process_bytes(encrypted_bytes, os.path.basename(file))
+        out_file = f"{out_dir}/{out_filename}"
+
+        with dbutils.fs.open(out_file, "wb") as fh:
+            fh.write(decrypted_bytes)
+
+        print(f"✅ Decrypted: {out_file}")
 
     print(f"✅ Completed folder: {folder}")
 

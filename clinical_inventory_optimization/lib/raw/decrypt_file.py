@@ -194,6 +194,48 @@ class AESDecryptor:
             print(f"❌ Decryption error: {str(e)}")
             return {"success": False, "error": str(e)}
 
+    def process_bytes(self, encrypted_bytes, input_filename):
+        """
+        Decrypt encrypted bytes and return the decrypted content with output filename.
+
+        Used when file I/O is handled externally (e.g. dbutils.fs.open) to avoid
+        FUSE mount limitations with special characters (spaces, parentheses) in paths.
+
+        Args:
+            encrypted_bytes (bytes): Raw encrypted file content
+            input_filename (str): Original filename (used to derive output filename)
+
+        Returns:
+            tuple: (decrypted_bytes, output_filename)
+        """
+        import os
+        mode, iv, ciphertext = self._detect_format(encrypted_bytes)
+
+        if mode == "CBC":
+            cipher = AES.new(self.key, AES.MODE_CBC, iv)
+        else:
+            cipher = AES.new(self.key, AES.MODE_ECB)
+
+        decrypted_data = cipher.decrypt(ciphertext)
+        decrypted_data = self._safe_unpad(decrypted_data)
+
+        try:
+            final_data = base64.b64decode(decrypted_data)
+        except Exception:
+            final_data = decrypted_data
+
+        file_type = self._detect_file_type(final_data)
+        ext_map = {"xlsx": ".xlsx", "xls": ".xls", "csv": ".csv"}
+
+        basename = os.path.basename(input_filename)
+        if basename.lower().endswith(".enc"):
+            basename = basename[:-4]
+        stem, _ = os.path.splitext(basename)
+        ext = ext_map.get(file_type, os.path.splitext(basename)[1] or "")
+        out_filename = stem + ext
+
+        return final_data, out_filename
+
     def decrypt_bytes(self, encrypted_bytes):
         """
         Decrypt raw bytes and return decrypted bytes.
