@@ -1,6 +1,7 @@
 # Databricks notebook source
 import sys
 import os
+from urllib.parse import unquote
 
 current_dir  = os.getcwd()
 project_root = os.path.dirname(os.path.dirname(current_dir))  # Code/Clinical_Inventory
@@ -99,21 +100,24 @@ src_base_mount = f"{src_bkt_mount_point}/{src_data_dir}".rstrip("/")
 
 def list_enc_files_one_level(base_path):
     """Return all .enc files directly under base_path and its immediate subfolders."""
+    def normalize(path):
+        return unquote(path.replace("dbfs:", "").rstrip("/"))
+
     files = [
-        i.path.replace("dbfs:", "").rstrip("/")
+        normalize(i.path)
         for i in dbutils.fs.ls(base_path)
         if i.path.endswith(".enc")
     ]
 
     subdirs = [
-        i.path.replace("dbfs:", "").rstrip("/")
+        normalize(i.path)
         for i in dbutils.fs.ls(base_path)
         if i.isDir()
     ]
 
     for d in subdirs:
         files += [
-            f.path.replace("dbfs:", "").rstrip("/")
+            normalize(f.path)
             for f in dbutils.fs.ls(d)
             if f.path.endswith(".enc")
         ]
