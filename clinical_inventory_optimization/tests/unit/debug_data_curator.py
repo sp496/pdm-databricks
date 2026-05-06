@@ -36,7 +36,8 @@ for _p in [_PROJECT_ROOT, _REPO_ROOT]:
 # Imports (no Databricks / pyspark required)
 # ---------------------------------------------------------------------------
 import logging
-from lib.curated.data_curator import DataCurator, load_excel_mapping
+import pandas as pd
+from lib.curated.data_curator import DataCurator, load_excel_mapping, read_dynamic_csv, read_excel_with_dynamic_header
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -54,21 +55,25 @@ _OUTPUTS_DIR    = os.path.join(_TESTS_DIR, "outputs")
 # Excel mapping files — place in tests/fixtures/ and update filenames below.
 # Set to None if you don't have the file locally; standardization will be skipped.
 LOCAL_MAPPING = {
-    "subject": r"../fixtures/Subject Summary Header Mapping.xlsx",
-    "depot":   None,
-    "site":    None,
-    "slsm":    None,   # no mapping file for supply-method files
-    "clsm":    None,
+    "subject":    r"../fixtures/Subject Summary Header Mapping.xlsx",
+    "depot":      r"../fixtures/Depot Inventory Header Mapping.xlsx",
+    "site":       r"../fixtures/Site Inventory Header Mapping.xlsx",
+    "slsm":       None,
+    "clsm":       None,
+    "site_depot": r"../fixtures/Site-Depot Mapping.xlsx",
 }
 
 # Sample CSV files — place in tests/fixtures/sample_csvs/ and update filenames below.
 # Set to None to skip that file type.
+# If subject_visit is set, subject is treated as the Subject Summary and assembly
+# is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
-    "subject": r"../fixtures/sample_csvs/Gilead GS-US-409-5704_Subject Summary (Unblinded)Subject Summary2026-04-14-18-57-28.csv",
-    "depot":   None,
-    "site":    None,
-    "slsm":    None,
-    "clsm":    None,
+    "subject":       None,
+    "depot":         r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsDepot2026-04-28-13-56-58.xlsx",
+    "site":          r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsSite2026-04-28-13-57-20.xlsx",
+    "slsm":          None,
+    "clsm":          None,
+    "subject_visit": r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.xlsx",
 }
 
 # Date folder string — the extract date stamped on the source files
@@ -247,6 +252,9 @@ def main():
     results = {}
 
     for file_type, csv_path in LOCAL_CSV.items():
+        if file_type == "subject_visit":
+            continue  # drives assembly mode for subject; not an independent type
+
         if not csv_path:
             logger.info(f"\n[{file_type}] No CSV configured — skipping")
             continue
@@ -256,16 +264,97 @@ def main():
             continue
 
         logger.info(f"\n--- Processing {file_type} ---")
-        logger.info(f"  CSV  : {csv_path}")
         logger.info(f"  Date : {DATE_FOLDER}")
 
-        result_df = curator.process_data_from_file(
-            file_path=csv_path,
-            file_type=file_type,
-            date_folder=DATE_FOLDER,
-            table_column_mapping=COLUMN_MAPPING[file_type],
-            date_columns=DATE_COLUMNS[file_type],
-        )
+        # Subject with visit summary: assemble from 3 files then process normally
+        if file_type == "subject" and LOCAL_CSV.get("subject_visit"):
+            visit_path      = LOCAL_CSV["subject_visit"]
+            site_depot_path = LOCAL_MAPPING.get("site_depot")
+
+            missing = [p for p in [visit_path, site_depot_path] if not p or not os.path.exists(p)]
+            if missing:
+                logger.warning(f"  Assembly file(s) not found — skipping: {missing}")
+                continue
+
+            logger.info(f"  subject_summary : {csv_path}")
+            logger.info(f"  visit_summary   : {visit_path}")
+            logger.info(f"  site_depot_map  : {site_depot_path}")
+
+            visit_df      = read_excel_with_dynamic_header(visit_path)
+            subject_df    = read_excel_with_dynamic_header(csv_path)
+            site_depot_df = pd.read_excel(site_depot_path, dtype=str)
+
+            assembled_df = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
+
+            result_df = curator.process_data(
+                assembled_df,
+                file_type='subject',
+                filename=os.path.basename(visit_path),
+                date_folder=DATE_FOLDER,
+                table_column_mapping=COLUMN_MAPPING["subject"],
+                date_columns=DATE_COLUMNS["subject"]
+            )
+
+        # Depot inventory: pivot Drug Status into quantity columns when EDGE-Lung mode is active
+        elif file_type == "depot" and LOCAL_CSV.get("subject_visit"):
+            site_depot_path = LOCAL_MAPPING.get("site_depot")
+
+            missing = [p for p in [site_depot_path] if not p or not os.path.exists(p)]
+            if missing:
+                logger.warning(f"  Assembly file(s) not found — skipping: {missing}")
+                continue
+
+            logger.info(f"  depot_inventory : {csv_path}")
+            logger.info(f"  site_depot_map  : {site_depot_path}")
+
+            depot_df = read_excel_with_dynamic_header(csv_path)
+            site_depot_df = pd.read_excel(site_depot_path, dtype=str)
+            assembled_depot_df = curator.assemble_depot_data(depot_df, site_depot_df)
+
+            result_df = curator.process_data(
+                assembled_depot_df,
+                file_type='depot',
+                filename=os.path.basename(csv_path),
+                date_folder=DATE_FOLDER,
+                table_column_mapping=COLUMN_MAPPING["depot"],
+                date_columns=DATE_COLUMNS["depot"],
+            )
+
+        # Site inventory: join depot mapping and pivot when EDGE-Lung mode is active
+        elif file_type == "site" and LOCAL_CSV.get("subject_visit"):
+            site_depot_path = LOCAL_MAPPING.get("site_depot")
+
+            missing = [p for p in [site_depot_path] if not p or not os.path.exists(p)]
+            if missing:
+                logger.warning(f"  Assembly file(s) not found — skipping: {missing}")
+                continue
+
+            logger.info(f"  site_inventory : {csv_path}")
+            logger.info(f"  site_depot_map : {site_depot_path}")
+
+            site_df = read_excel_with_dynamic_header(csv_path)
+            site_depot_df = pd.read_excel(site_depot_path, dtype=str)
+
+            assembled_site_df = curator.assemble_site_data(site_df, site_depot_df)
+
+            result_df = curator.process_data(
+                assembled_site_df,
+                file_type='site',
+                filename=os.path.basename(csv_path),
+                date_folder=DATE_FOLDER,
+                table_column_mapping=COLUMN_MAPPING["site"],
+                date_columns=DATE_COLUMNS["site"],
+            )
+
+        else:
+            logger.info(f"  CSV  : {csv_path}")
+            result_df = curator.process_data_from_file(
+                file_path=csv_path,
+                file_type=file_type,
+                date_folder=DATE_FOLDER,
+                table_column_mapping=COLUMN_MAPPING[file_type],
+                date_columns=DATE_COLUMNS[file_type],
+            )
 
         if result_df is not None:
             results[file_type] = result_df
@@ -284,6 +373,8 @@ def main():
     logger.info("Summary")
     logger.info("=" * 70)
     for file_type in LOCAL_CSV:
+        if file_type == "subject_visit":
+            continue
         if file_type in results:
             logger.info(f"  {file_type:8s}: {results[file_type].shape[0]} rows processed OK")
         else:

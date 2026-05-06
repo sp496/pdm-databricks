@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class Constants:
     """Constants used throughout the data curation process."""
-    STUDY_PROTOCOL_PATTERN = r'GS-US-\d+-\d+(?:-\d+_\d+)?' #r'GS-US-\d+-\d+'
+    STUDY_PROTOCOL_PATTERN = r'GS-US-\d+-\d+(?:-\d+_\d+)?|EDGE-Lung' # r'GS-US-\d+-\d+(?:-\d+_\d+)?'
     DATE_FOLDER_FORMAT = "%Y%m%d"
     INPUT_DATE_FORMATS = ['%d-%b-%Y', '%d %b %Y']  # Support multiple date formats
     OUTPUT_DATE_FORMAT = '%Y-%m-%d'
@@ -68,10 +68,10 @@ class DataCurator:
 
         self.mapping_df_map = {
             'subject': self.subject_mapping_df,
-            'site': self.site_mapping_df,
-            'depot': self.depot_mapping_df,
-            'slsm': self.slsm_mapping_df,
-            'clsm': self.clsm_mapping_df
+            'site':    self.site_mapping_df,
+            'depot':   self.depot_mapping_df,
+            'slsm':    self.slsm_mapping_df,
+            'clsm':    self.clsm_mapping_df
         }
 
         logger.info("DataCurator initialized")
@@ -279,6 +279,201 @@ class DataCurator:
     # ========================================================================
 
 
+    def assemble_subject_visit_data(
+        self,
+        visit_df: pd.DataFrame,
+        subject_df: pd.DataFrame,
+        site_depot_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """
+        Assemble a unified subject-visit DataFrame from three source DataFrames.
+
+        Reduces visit_df to the latest visit per subject per drug, joins
+        patient-level fields from subject_df, and maps sites to depots
+        via site_depot_df.
+
+        Returns:
+            DataFrame with one row per subject per drug.
+        """
+        visit_df = visit_df.copy()
+        visit_df['Visit Date'] = pd.to_datetime(visit_df['Visit Date'], dayfirst=True, errors='coerce')
+
+        latest = (
+            visit_df
+            .sort_values(['Subject Number', 'Drug Description', 'Visit Date'])
+            .groupby(['Subject Number', 'Drug Description'], as_index=False)
+            .tail(1)
+            .reset_index(drop=True)
+        )
+        latest = latest.drop(columns=[c for c in ['Gilead Site Number'] if c in latest.columns])
+        latest['Visit Date'] = latest['Visit Date'].dt.strftime('%d-%b-%Y')
+
+        subject_cols = ['Subject Number', 'Study Protocol', 'Date Randomized', 'Date Discontinued', 'Gilead Site Number']
+        latest = latest.merge(
+            subject_df[[c for c in subject_cols if c in subject_df.columns]],
+            how='left',
+            on=['Subject Number'],
+        )
+
+        latest = (
+            latest
+            .merge(site_depot_df[['Arcus Site', 'Depot']], how='left', left_on='Arcus Site ID', right_on='Arcus Site')
+            .rename(columns={'Depot': 'Parent Depot'})
+            .drop(columns=['Arcus Site'], errors='ignore')
+        )
+
+        logger.info(f"Assembled subject-visit data: {latest.shape[0]} rows, {latest.shape[1]} columns")
+        return latest
+
+    def assemble_site_data(
+        self,
+        site_df: pd.DataFrame,
+        site_depot_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """
+        Preprocess site inventory data from two source DataFrames.
+
+        1. Join site_depot_df to get Parent Depot and Country per site.
+        2. Drop rows missing site, quantity, or drug status; convert quantity to int.
+        3. Pivot Drug Status into quantity columns — one output row per site/lot grain.
+
+        Returns:
+            Transformed DataFrame with one row per site/lot combination.
+        """
+        status_mapping = {
+            'In Transit': 'Quantity Study Drug - Requested',
+            'Intact': 'Quantity Study Drug - Available',
+            'Quarantined': 'Quantity Study Drug - Quarantined',
+            'Assigned': 'Quantity Study Drug - Assigned',
+            'Damaged': 'Quantity Study Drug - Damaged',
+        }
+
+        groupby_cols = [
+            'Arcus Site Number', 'Gilead Site Number', 'PI Last Name', 'PCI Item Number Lot', 'Drug Description',
+            'Drug Code', 'Finished Lot', 'Expiration Date', 'Country', 'Parent Depot'
+        ]
+
+        quantity_columns = [
+            'Quantity Study Drug - Requested', 'Quantity Study Drug - Available',
+            'Quantity Study Drug - Assigned', 'Quantity Study Drug - Lost',
+            'Quantity Study Drug - Damaged', 'Quantity Study Drug - Quarantined',
+            'Quantity Study Drug - Rejected', 'Quantity Study Drug - Do Not Dispense',
+            'Quantity Study Drug - Expired', 'Quantity Study Drug - Total',
+        ]
+
+        # Step 1: join depot mapping
+        df = (
+            site_df
+            .merge(
+                site_depot_df[['Arcus Site', 'Depot', 'Depot Country']],
+                how='left',
+                left_on='Arcus Site Number',
+                right_on='Arcus Site',
+            )
+            .rename(columns={'Depot': 'Parent Depot', 'Depot Country': 'Country'})
+            .drop(columns=['Arcus Site'], errors='ignore')
+        )
+
+        # Step 2: clean
+        df = df.dropna(subset=['Arcus Site Number', 'Quantity (Site Units)', 'Drug Status'])
+        df['Quantity (Site Units)'] = (
+            pd.to_numeric(df['Quantity (Site Units)'], errors='coerce')
+            .fillna(0)
+            .astype(int)
+        )
+
+        # Step 3: pivot Drug Status → quantity columns
+        result_list = []
+        for name, group in df.groupby(groupby_cols):
+            row_dict = dict(zip(groupby_cols, name))
+            for q_col in quantity_columns:
+                row_dict[q_col] = 0
+            for _, row in group.iterrows():
+                drug_status = row['Drug Status']
+                quantity = row['Quantity (Site Units)']
+                if drug_status in status_mapping:
+                    row_dict[status_mapping[drug_status]] += quantity
+            row_dict['Quantity Study Drug - Total'] = sum(
+                row_dict[c] for c in quantity_columns if c != 'Quantity Study Drug - Total'
+            )
+            result_list.append(row_dict)
+
+        result = pd.DataFrame(result_list)
+        logger.info(f"Assembled site data: {result.shape[0]} rows, {result.shape[1]} columns")
+        return result
+
+    def assemble_depot_data(
+        self,
+        depot_df: pd.DataFrame,
+        site_depot_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """
+        Preprocess depot inventory data.
+
+        1. Join site_depot_df (deduplicated) to get Country per depot.
+        2. Drop rows missing depot, quantity, or drug status; convert quantity to int.
+        3. Pivot Drug Status into quantity columns — one output row per depot/lot grain.
+
+        Returns:
+            Transformed DataFrame with one row per depot/lot combination.
+        """
+        status_mapping = {
+            'In Transit':  'Quantity Study Drug - Requested',
+            'Intact':      'Quantity Study Drug - Available',
+            'Quarantined': 'Quantity Study Drug - Quarantined',
+            'Damaged':     'Quantity Study Drug - Damaged',
+        }
+
+        groupby_cols = [
+            'Depot Number', 'Depot Name', 'Drug Description', 'Drug Code', 'PCI Item Number Lot',
+            'Finished Lot', 'Expiration Date', 'Country',
+        ]
+
+        quantity_columns = [
+            'Quantity Study Drug - Requested', 'Quantity Study Drug - Available',  'Quantity Study Drug - Lost',
+            'Quantity Study Drug - Damaged',   'Quantity Study Drug - Quarantined',
+            'Quantity Study Drug - Rejected',  'Quantity Study Drug - Do Not Ship',
+            'Quantity Study Drug - Expired',   'Quantity Study Drug - Packaged (Unavailable)',
+            'Quantity Study Drug - Total',
+        ]
+
+        depot_country = (
+            site_depot_df[['Depot', 'Depot Country']]
+            .drop_duplicates(subset=['Depot'])
+            .rename(columns={'Depot Country': 'Country'})
+        )
+        df = (
+            depot_df
+            .merge(depot_country, how='left', left_on='Depot Number', right_on='Depot')
+            .drop(columns=['Depot'], errors='ignore')
+        )
+
+        df = df.dropna(subset=['Depot Number', 'Quantity (Depot Units)', 'Drug Status']).copy()
+        df['Quantity (Depot Units)'] = (
+            pd.to_numeric(df['Quantity (Depot Units)'], errors='coerce')
+            .fillna(0)
+            .astype(int)
+        )
+
+        result_list = []
+        for name, group in df.groupby(groupby_cols):
+            row_dict = dict(zip(groupby_cols, name))
+            for q_col in quantity_columns:
+                row_dict[q_col] = 0
+            for _, row in group.iterrows():
+                drug_status = row['Drug Status']
+                quantity = row['Quantity (Depot Units)']
+                if drug_status in status_mapping:
+                    row_dict[status_mapping[drug_status]] += quantity
+            row_dict['Quantity Study Drug - Total'] = sum(
+                row_dict[c] for c in quantity_columns if c != 'Quantity Study Drug - Total'
+            )
+            result_list.append(row_dict)
+
+        result = pd.DataFrame(result_list)
+        logger.info(f"Assembled depot data: {result.shape[0]} rows, {result.shape[1]} columns")
+        return result
+
     def type_specific_processing(self, df: pd.DataFrame, file_type: str) -> pd.DataFrame:
         if file_type == 'subject':
             if 'Year of Birth' in df.columns:
@@ -388,7 +583,7 @@ class DataCurator:
             df: Input DataFrame
             filename: Source filename
             date_folder: Date folder string (e.g., "20251106")
-            column_mapping: Dictionary to rename columns
+            table_column_mapping: Dictionary to rename columns
             date_columns: List of date column names to convert
 
         Returns:
@@ -502,6 +697,37 @@ def read_dynamic_csv(filepath: str, max_rows: int = 10) -> pd.DataFrame:
                 df = pd.read_csv(filepath, dtype=str, encoding='utf-8', skiprows=i)
                 logger.info(f"Loaded CSV: {df.shape[0]} rows, {df.shape[1]} columns")
                 return df
+
+    raise ValueError(f"No fully populated header line found in {filepath}")
+
+
+def read_excel_with_dynamic_header(filepath: str, max_rows: int = 10) -> pd.DataFrame:
+    """
+    Read Excel file with dynamic header row detection.
+
+    Finds the first row where all cells are non-empty and uses it as the header.
+    This is a convenience function for local testing.
+
+    Args:
+        filepath: Path to the Excel file
+        max_rows: Maximum number of rows to search for header
+
+    Returns:
+        DataFrame with data
+
+    Raises:
+        FileNotFoundError: If file doesn't exist
+        ValueError: If no valid header found
+    """
+    logger.info(f"Reading Excel with dynamic header detection: {filepath}")
+
+    preview = pd.read_excel(filepath, header=None, nrows=max_rows, dtype=str)
+    for i, row in preview.iterrows():
+        values = [v for v in row if pd.notna(v) and str(v).strip()]
+        if len(values) == len(row) and len(values) > 1:
+            df = pd.read_excel(filepath, header=i, dtype=str)
+            logger.info(f"Loaded Excel: {df.shape[0]} rows, {df.shape[1]} columns")
+            return df
 
     raise ValueError(f"No fully populated header line found in {filepath}")
 
