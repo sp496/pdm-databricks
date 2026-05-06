@@ -742,7 +742,7 @@ class DemandPlanningProcessor:
             .to_dict()
         )
 
-        df_merged['study_drug_dispensed_base'] = df_merged['study_drug_dispensed'].str.extract(r'^(.*?)\s\d', expand=False)
+        df_merged['study_drug_dispensed_base'] = df_merged['study_drug_dispensed'].str.extract(r'^(.*?)\s\d', expand=False).fillna('nan')
 
         df_merged["key_col"] = (
             df_merged[key_cols]

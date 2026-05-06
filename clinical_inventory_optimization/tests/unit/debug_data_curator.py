@@ -56,8 +56,8 @@ _OUTPUTS_DIR    = os.path.join(_TESTS_DIR, "outputs")
 # Set to None if you don't have the file locally; standardization will be skipped.
 LOCAL_MAPPING = {
     "subject":    r"../fixtures/Subject Summary Header Mapping.xlsx",
-    "depot":      r"../fixtures/Depot Inventory Header Mapping.xlsx",
-    "site":       r"../fixtures/Site Inventory Header Mapping.xlsx",
+    "depot":      None,#r"../fixtures/Depot Inventory Header Mapping.xlsx",
+    "site":       None,#r"../fixtures/Site Inventory Header Mapping.xlsx",
     "slsm":       None,
     "clsm":       None,
     "site_depot": r"../fixtures/Site-Depot Mapping.xlsx",
@@ -68,12 +68,12 @@ LOCAL_MAPPING = {
 # If subject_visit is set, subject is treated as the Subject Summary and assembly
 # is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
-    "subject":       None,
-    "depot":         r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsDepot2026-04-28-13-56-58.xlsx",
-    "site":          r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsSite2026-04-28-13-57-20.xlsx",
+    "subject":       r"../fixtures/sample_csvs/Gilead GS-US-216-0128_A_Subject Summary (Unblinded)Subject Summary2026-05-05-11-44-22.csv",
+    "depot":         None,#r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsDepot2026-04-28-13-56-58.xlsx",
+    "site":          None,#r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsSite2026-04-28-13-57-20.xlsx",
     "slsm":          None,
     "clsm":          None,
-    "subject_visit": r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.xlsx",
+    "subject_visit": None,#r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.xlsx",
 }
 
 # Date folder string — the extract date stamped on the source files

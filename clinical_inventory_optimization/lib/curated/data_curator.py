@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class Constants:
     """Constants used throughout the data curation process."""
-    STUDY_PROTOCOL_PATTERN = r'GS-US-\d+-\d+(?:-\d+_\d+)?|EDGE-Lung' # r'GS-US-\d+-\d+(?:-\d+_\d+)?'
+    STUDY_PROTOCOL_PATTERN = r'GS-US-\d+-\d+(?:-\d+)?(?:_[A-Z](?![a-zA-Z]))?' # r'GS-US-\d+-\d+(?:-\d+_\d+)?'
     DATE_FOLDER_FORMAT = "%Y%m%d"
     INPUT_DATE_FORMATS = ['%d-%b-%Y', '%d %b %Y']  # Support multiple date formats
     OUTPUT_DATE_FORMAT = '%Y-%m-%d'
