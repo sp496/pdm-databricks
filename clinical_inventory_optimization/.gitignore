@@ -1,3 +1,6 @@
 # Un-ignore the lib/ source directory for this subdirectory
 !lib/
 !lib/**
+# Re-ignore Python bytecode caches within lib/
+lib/**/__pycache__/
+lib/**/*.py[cod]
