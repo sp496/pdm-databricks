@@ -60,7 +60,7 @@ class TestResolveColumns:
         assert list(result.columns) == ["A", "B"]
 
 
-class TestAssembleWithColMap:
+class TestAssembleFunctions:
     @pytest.fixture
     def curator(self):
         return DataCurator()
@@ -73,25 +73,7 @@ class TestAssembleWithColMap:
             "Depot Country": ["US"],
         })
 
-    def test_assemble_subject_visit_data_with_visit_col_map(self, curator, site_depot_df):
-        visit_df = pd.DataFrame({
-            "Visit Date (Suvoda)": ["01-Jan-2024"],
-            "Subject Number": ["S001"],
-            "Drug Description": ["Drug A"],
-            "Arcus Site ID": ["SITE001"],
-        })
-        subject_df = pd.DataFrame({
-            "Subject Number": ["S001"],
-            "Study Protocol": ["GS-US-123-4567"],
-            "Date Randomized": ["01-Jan-2024"],
-            "Date Discontinued": [None],
-            "Gilead Site Number": ["GS001"],
-        })
-        visit_col_map = {"Visit Date": ["Visit Date", "Visit Date (Suvoda)"]}
-        result = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df, visit_col_map=visit_col_map)
-        assert "Visit Date" in result.columns
-
-    def test_assemble_subject_visit_data_without_col_map(self, curator, site_depot_df):
+    def test_assemble_subject_visit_data_canonical_headers(self, curator, site_depot_df):
         visit_df = pd.DataFrame({
             "Visit Date": ["01-Jan-2024"],
             "Subject Number": ["S001"],
@@ -107,10 +89,11 @@ class TestAssembleWithColMap:
         })
         result = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
         assert "Visit Date" in result.columns
+        assert len(result) == 1
 
-    def test_assemble_site_data_with_col_map(self, curator, site_depot_df):
+    def test_assemble_site_data_canonical_headers(self, curator, site_depot_df):
         site_df = pd.DataFrame({
-            "Site Number (Arcus)": ["SITE001"],
+            "Arcus Site Number": ["SITE001"],
             "Gilead Site Number": ["GS001"],
             "PI Last Name": ["Smith"],
             "PCI Item Number Lot": ["LOT001"],
@@ -121,13 +104,12 @@ class TestAssembleWithColMap:
             "Quantity (Site Units)": ["10"],
             "Drug Status": ["Intact"],
         })
-        col_map = {"Arcus Site Number": ["Arcus Site Number", "Site Number (Arcus)"]}
-        result = curator.assemble_site_data(site_df, site_depot_df, col_map=col_map)
+        result = curator.assemble_site_data(site_df, site_depot_df)
         assert not result.empty
 
-    def test_assemble_depot_data_with_col_map(self, curator, site_depot_df):
+    def test_assemble_depot_data_canonical_headers(self, curator, site_depot_df):
         depot_df = pd.DataFrame({
-            "Depot ID": ["DEPOT1"],
+            "Depot Number": ["DEPOT1"],
             "Depot Name": ["Main Depot"],
             "Drug Description": ["Drug A"],
             "Drug Code": ["DC001"],
@@ -137,6 +119,5 @@ class TestAssembleWithColMap:
             "Quantity (Depot Units)": ["50"],
             "Drug Status": ["Intact"],
         })
-        col_map = {"Depot Number": ["Depot Number", "Depot ID"]}
-        result = curator.assemble_depot_data(depot_df, site_depot_df, col_map=col_map)
+        result = curator.assemble_depot_data(depot_df, site_depot_df)
         assert not result.empty

@@ -297,8 +297,6 @@ class DataCurator:
         visit_df: pd.DataFrame,
         subject_df: pd.DataFrame,
         site_depot_df: pd.DataFrame,
-        visit_col_map: Optional[Dict[str, List[str]]] = None,
-        subject_col_map: Optional[Dict[str, List[str]]] = None,
     ) -> pd.DataFrame:
         """
         Assemble a unified subject-visit DataFrame from three source DataFrames.
@@ -310,11 +308,23 @@ class DataCurator:
         Returns:
             DataFrame with one row per subject per drug.
         """
+        visit_col_map = {
+            'Visit Date':       ['Visit Date'],
+            'Subject Number':   ['Subject Number'],
+            'Drug Description': ['Drug Description'],
+            'Arcus Site ID':    ['Arcus Site ID'],
+        }
+        subject_col_map = {
+            'Subject Number':    ['Subject Number'],
+            'Study Protocol':    ['Study Protocol'],
+            'Date Randomized':   ['Date Randomized'],
+            'Date Discontinued': ['Date Discontinued'],
+            'Gilead Site Number': ['Gilead Site Number'],
+        }
+
         visit_df = visit_df.copy()
-        if visit_col_map:
-            visit_df = self._resolve_columns(visit_df, visit_col_map)
-        if subject_col_map:
-            subject_df = self._resolve_columns(subject_df, subject_col_map)
+        visit_df = self._resolve_columns(visit_df, visit_col_map)
+        subject_df = self._resolve_columns(subject_df, subject_col_map)
 
         visit_df['Visit Date'] = pd.to_datetime(visit_df['Visit Date'], dayfirst=True, errors='coerce')
 
@@ -349,7 +359,6 @@ class DataCurator:
         self,
         site_df: pd.DataFrame,
         site_depot_df: pd.DataFrame,
-        col_map: Optional[Dict[str, List[str]]] = None,
     ) -> pd.DataFrame:
         """
         Preprocess site inventory data from two source DataFrames.
@@ -361,8 +370,19 @@ class DataCurator:
         Returns:
             Transformed DataFrame with one row per site/lot combination.
         """
-        if col_map:
-            site_df = self._resolve_columns(site_df, col_map)
+        col_map = {
+            'Arcus Site Number':   ['Arcus Site Number'],
+            'Gilead Site Number':  ['Gilead Site Number'],
+            'PI Last Name':        ['PI Last Name'],
+            'PCI Item Number Lot': ['PCI Item Number Lot'],
+            'Drug Description':    ['Drug Description'],
+            'Drug Code':           ['Drug Code'],
+            'Finished Lot':        ['Finished Lot'],
+            'Expiration Date':     ['Expiration Date'],
+            'Quantity (Site Units)': ['Quantity (Site Units)'],
+            'Drug Status':         ['Drug Status'],
+        }
+        site_df = self._resolve_columns(site_df, col_map)
 
         status_mapping = {
             'In Transit': 'Quantity Study Drug - Requested',
@@ -430,7 +450,6 @@ class DataCurator:
         self,
         depot_df: pd.DataFrame,
         site_depot_df: pd.DataFrame,
-        col_map: Optional[Dict[str, List[str]]] = None,
     ) -> pd.DataFrame:
         """
         Preprocess depot inventory data.
@@ -442,8 +461,18 @@ class DataCurator:
         Returns:
             Transformed DataFrame with one row per depot/lot combination.
         """
-        if col_map:
-            depot_df = self._resolve_columns(depot_df, col_map)
+        col_map = {
+            'Depot Number':          ['Depot Number'],
+            'Depot Name':            ['Depot Name'],
+            'Drug Description':      ['Drug Description'],
+            'Drug Code':             ['Drug Code'],
+            'PCI Item Number Lot':   ['PCI Item Number Lot'],
+            'Finished Lot':          ['Finished Lot'],
+            'Expiration Date':       ['Expiration Date'],
+            'Quantity (Depot Units)': ['Quantity (Depot Units)'],
+            'Drug Status':           ['Drug Status'],
+        }
+        depot_df = self._resolve_columns(depot_df, col_map)
 
         status_mapping = {
             'In Transit':  'Quantity Study Drug - Requested',
