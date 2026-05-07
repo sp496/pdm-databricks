@@ -278,12 +278,27 @@ class DataCurator:
     # Core Processing Methods (accept DataFrames)
     # ========================================================================
 
+    @staticmethod
+    def _resolve_columns(df: pd.DataFrame, col_map: Dict[str, List[str]]) -> pd.DataFrame:
+        """
+        Rename columns using a {target: [source, ...]} mapping.
+        For each target the first source column found in df wins; unmatched targets are skipped.
+        """
+        rename = {}
+        for target, sources in col_map.items():
+            for src in sources:
+                if src in df.columns:
+                    rename[src] = target
+                    break
+        return df.rename(columns=rename)
 
     def assemble_subject_visit_data(
         self,
         visit_df: pd.DataFrame,
         subject_df: pd.DataFrame,
         site_depot_df: pd.DataFrame,
+        visit_col_map: Optional[Dict[str, List[str]]] = None,
+        subject_col_map: Optional[Dict[str, List[str]]] = None,
     ) -> pd.DataFrame:
         """
         Assemble a unified subject-visit DataFrame from three source DataFrames.
@@ -296,6 +311,11 @@ class DataCurator:
             DataFrame with one row per subject per drug.
         """
         visit_df = visit_df.copy()
+        if visit_col_map:
+            visit_df = self._resolve_columns(visit_df, visit_col_map)
+        if subject_col_map:
+            subject_df = self._resolve_columns(subject_df, subject_col_map)
+
         visit_df['Visit Date'] = pd.to_datetime(visit_df['Visit Date'], dayfirst=True, errors='coerce')
 
         latest = (
@@ -329,6 +349,7 @@ class DataCurator:
         self,
         site_df: pd.DataFrame,
         site_depot_df: pd.DataFrame,
+        col_map: Optional[Dict[str, List[str]]] = None,
     ) -> pd.DataFrame:
         """
         Preprocess site inventory data from two source DataFrames.
@@ -340,6 +361,9 @@ class DataCurator:
         Returns:
             Transformed DataFrame with one row per site/lot combination.
         """
+        if col_map:
+            site_df = self._resolve_columns(site_df, col_map)
+
         status_mapping = {
             'In Transit': 'Quantity Study Drug - Requested',
             'Intact': 'Quantity Study Drug - Available',
@@ -406,6 +430,7 @@ class DataCurator:
         self,
         depot_df: pd.DataFrame,
         site_depot_df: pd.DataFrame,
+        col_map: Optional[Dict[str, List[str]]] = None,
     ) -> pd.DataFrame:
         """
         Preprocess depot inventory data.
@@ -417,6 +442,9 @@ class DataCurator:
         Returns:
             Transformed DataFrame with one row per depot/lot combination.
         """
+        if col_map:
+            depot_df = self._resolve_columns(depot_df, col_map)
+
         status_mapping = {
             'In Transit':  'Quantity Study Drug - Requested',
             'Intact':      'Quantity Study Drug - Available',
