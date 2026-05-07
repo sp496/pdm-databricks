@@ -291,20 +291,3 @@ ORDER BY
           """)
 
 df.display()
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select * from `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_depot_inventory
-# MAGIC where
-# MAGIC extract_date=(select max(extract_date) from `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_depot_inventory)
-# MAGIC and study_protocol = 'GS-US-412-2055'
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select * from `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_site_inventory
-# MAGIC where
-# MAGIC extract_date=(select max(extract_date) from `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_site_inventory)
-# MAGIC and
-# MAGIC study_protocol = 'GS-US-563-6041'

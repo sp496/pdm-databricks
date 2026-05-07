@@ -496,7 +496,7 @@ MAPPING_CONFIG = {
             "country": StringType(),
             "parent_depot": IntegerType(),
             "investigator": StringType(),
-            "subject_number": LongType(),
+            "subject_number": StringType(),
             "year_of_birth": IntegerType(),
             "gender": StringType(),
             "tpc": StringType(),
@@ -709,9 +709,9 @@ def cast_and_write_to_delta(pandas_df, table_name: str, date_folder: str, schema
             if isinstance(data_type, DateType):
                 spark_df = spark_df.withColumn(col_name, F.to_date(F.col(col_name), "yyyy-MM-dd"))
             elif isinstance(data_type, TimestampType):
-                spark_df = spark_df.withColumn(col_name, F.col(col_name).cast(TimestampType()))
+                spark_df = spark_df.withColumn(col_name, F.col(col_name).try_cast(TimestampType()))
             else:
-                spark_df = spark_df.withColumn(col_name, F.col(col_name).cast(data_type))
+                spark_df = spark_df.withColumn(col_name, F.col(col_name).try_cast(data_type))
 
     # Select only columns in schema
     spark_df = spark_df.select(*schema_mapping.keys())

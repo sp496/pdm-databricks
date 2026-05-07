@@ -68,12 +68,12 @@ LOCAL_MAPPING = {
 # If subject_visit is set, subject is treated as the Subject Summary and assembly
 # is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
-    "subject":       r"../fixtures/sample_csvs/Gilead GS-US-216-0128_A_Subject Summary (Unblinded)Subject Summary2026-05-05-11-44-22.csv",
-    "depot":         None,#r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsDepot2026-04-28-13-56-58.xlsx",
-    "site":          None,#r"../fixtures/sample_csvs/EDGE-Lung_Inventory LevelsSite2026-04-28-13-57-20.xlsx",
-    "slsm":          None,
-    "clsm":          None,
-    "subject_visit": None,#r"../fixtures/sample_csvs/EDGE-Lung_Subject Visit SummarySubject Visit Summary2026-04-28-13-56-07.xlsx",
+    "subject":       r"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Summary2026-05-06-15-33-02.xlsx",
+    "depot":         r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
+    "site":          r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsSite2026-05-06-15-33-02.xlsx",
+    "slsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
+    "clsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
+    "subject_visit": r"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Visit Summary2026-05-06-15-33-02.xlsx",
 }
 
 # Date folder string — the extract date stamped on the source files

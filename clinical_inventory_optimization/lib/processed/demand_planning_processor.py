@@ -971,6 +971,7 @@ class DemandPlanningProcessor:
                 raise ValueError("Either df_subjects or subject_file must be provided")
             logger.info(f"Loading subject data from file: {subject_file}")
             df_subjects = self.data_loader.load_subject_data(subject_file)
+            # df_subjects = df_subjects[df_subjects['study_protocol'] == 'GS-US-457-6411']
         else:
             logger.info(f"Using provided subject DataFrame with {len(df_subjects)} records")
             # Make a copy to avoid modifying the original
