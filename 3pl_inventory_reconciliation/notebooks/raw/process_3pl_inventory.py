@@ -17,10 +17,9 @@ from lib.raw.discovery import (
     get_latest_completed_quarter,
     discover_3pl_files,
     discover_mapping_files,
-    discover_sap_file,
 )
 from lib.raw.mapping_loader import load_quarter_mappings
-from lib.raw.excel_processor import process_3pl_file, process_sap_file
+from lib.raw.excel_processor import process_3pl_file
 from common.config_loader import load_config
 
 # COMMAND ----------
@@ -37,8 +36,8 @@ src_bkt_mount_point = config["src_bkt_mount_point"]
 tgt_bkt_mount_point = config["tgt_bkt_mount_point"]
 src_data_dir        = config["src_data_dir"].format(env=resolved_env)
 tgt_data_dir        = config["tgt_data_dir"]
-segments            = config["segments"]
-header_sheet_name   = config["header_mapping_sheet_name"]
+segments          = config["segments"]
+header_sheet_name = config["header_mapping_sheet_name"]
 
 src_root = f"{src_bkt_mount_point}/{src_data_dir}"
 tgt_root = f"{tgt_bkt_mount_point}/{tgt_data_dir}"
@@ -116,20 +115,4 @@ for entry in files_3pl:
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC #### Process SAP report
-
-# COMMAND ----------
-
-sap_path = discover_sap_file(dbutils, quarter_root)
-if sap_path:
-    print(f"SAP source: {sap_path}")
-    sap_out_dir = f"{target_quarter_root}/sap_report_files"
-    sap_out_name = os.path.basename(sap_path).replace(".xlsx", ".csv").replace(".xls", ".csv")
-    process_sap_file(dbutils, sap_path, sap_out_dir, sap_out_name)
-else:
-    print("No SAP report file found for this quarter")
-
-# COMMAND ----------
-
-print(f"Raw processing complete for {year} {quarter}")
+print(f"3PL raw processing complete for {year} {quarter}")
