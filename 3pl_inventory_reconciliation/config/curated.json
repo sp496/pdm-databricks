@@ -1,0 +1,4 @@
+{
+  "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
+  "raw_data_dir": "3pl_inventory/raw"
+}

@@ -1,0 +1,6 @@
+{
+  "src_bkt_mount_point": "$buckets.legacy_raw.mount",
+  "tgt_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
+  "src_data_dir": "pdm-gilead-dna/{env}/gilead/supplychain/3pl_inventory/inbound",
+  "tgt_data_dir": "3pl_inventory/raw"
+}
