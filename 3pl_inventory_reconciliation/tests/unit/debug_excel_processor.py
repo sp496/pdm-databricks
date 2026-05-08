@@ -47,16 +47,16 @@ _OUTPUTS_DIR    = os.path.join(_TESTS_DIR, "outputs")
 # ===========================================================================
 
 # Drop a sample inventory xlsx into tests/fixtures/sample_csvs/ and point here.
-SAMPLE_FILE  = os.path.join(_SAMPLE_DIR, "1121_inventory.xlsx")
+SAMPLE_FILE  = os.path.join(_SAMPLE_DIR, "Accx.xlsx")
 
 # Site id (used to look up sheet/column mappings — mirror the folder name)
-SITE_ID      = "1121"
-SEGMENT      = "clinical"   # or "commercial"
+SITE_ID      = "1205"
+SEGMENT      = "commercial"   # or "commercial"
 
 # If you have a local mapping file, point to it and set MAPPING_SHEET_NAME.
 # Set to None to skip mapping-based sheet filtering and process all sheets.
-MAPPING_FILE       = None   # e.g. os.path.join(_FIXTURES_DIR, "api_mapping_2025_Q1.xlsx")
-MAPPING_SHEET_NAME = "Header Mapping"
+MAPPING_FILE       = os.path.join(_FIXTURES_DIR, "api_mapping_2026_Q1.xlsx")   # e.g. os.path.join(_FIXTURES_DIR, "api_mapping_2025_Q1.xlsx")
+MAPPING_SHEET_NAME = "Header Mappings"
 
 
 # ===========================================================================
@@ -67,12 +67,12 @@ def _load_mapping(file_path, sheet_name):
     if not file_path or not os.path.exists(file_path):
         logger.warning(f"Mapping file not found, all sheets will be processed: {file_path}")
         return {}, {}
-    df = pd.read_excel(file_path, sheet_name=sheet_name).astype(str)
-    cmo_column_dict = df.groupby("CMO")["CMO Column Header"].apply(list).to_dict()
-    df["Sheet Name"] = df.groupby("CMO")["Sheet Name"].ffill().str.lower()
+    df = pd.read_excel(file_path, sheet_name=sheet_name, dtype=str)
+    cmo_column_dict = df.groupby("3PL")["3PL Column Header"].apply(list).to_dict()
+    df["Sheet Name"] = df.groupby("3PL")["Sheet Name"].ffill().str.lower()
     df["Sheet Name"] = df["Sheet Name"].replace("nan", None)
     cmo_sheet_dict = (
-        df.groupby("CMO")["Sheet Name"]
+        df.groupby("3PL")["Sheet Name"]
         .apply(lambda x: sorted({s.strip() for name in x.dropna() for s in name.split(",")}))
         .to_dict()
     )
