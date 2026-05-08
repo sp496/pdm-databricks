@@ -3,6 +3,6 @@
   "tgt_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
   "src_data_dir": "pdm-gilead-dna/{env}/gilead/supplychain/cmo_inventory_recon",
   "tgt_data_dir": "3pl_inventory_reconciliation/raw",
-  "header_mapping_sheet_name": "Header Mapping",
+  "header_mapping_sheet_name": "Header Mappings",
   "segments": ["clinical", "commercial"]
 }
