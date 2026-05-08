@@ -29,8 +29,13 @@ def flattened_cmo_column_dict(cmo_column_dict):
 # Table boundary detection
 # ---------------------------------------------------------------------------
 
-def find_table_boundaries(df, site_id, cmo_column_dict):
+def find_table_boundaries(df, expected_columns):
     """Locate the header row and data block within a sparsely-populated sheet.
+
+    Args:
+        df: raw sheet read with header=None.
+        expected_columns: list of header names to look for. Used both to locate
+            the header row and to apply the null-ratio filter. Pass [] if none.
 
     Returns dict with keys: start_row, end_row, start_col, end_col, header, data.
     Returns None if no usable table is found.
@@ -46,22 +51,19 @@ def find_table_boundaries(df, site_id, cmo_column_dict):
             df = df.iloc[:, :col_index].copy()
             break
 
-    expected_columns = []
-    if site_id in cmo_column_dict:
-        expected_columns = [col.lower() for col in cmo_column_dict[site_id]]
+    expected_columns = [col.lower() for col in expected_columns]
 
     # --- Locate header row ---
     start_row = None
 
-    if expected_columns:
-        min_matches = 2
-        for idx, row in df.iterrows():
-            row_values = [str(x).strip().lower() for x in row.dropna().tolist()]
-            matches = sum(1 for col in expected_columns if col in row_values)
-            if matches >= min_matches:
-                start_row = idx
-                print(f"Header found at row {start_row} ({matches} column matches)")
-                break
+    min_matches = 2
+    for idx, row in df.iterrows():
+        row_values = [str(x).strip().lower() for x in row.dropna().tolist()]
+        matches = sum(1 for col in expected_columns if col in row_values)
+        if matches >= min_matches:
+            start_row = idx
+            print(f"Header found at row {start_row} ({matches} column matches)")
+            break
 
     if start_row is None:
         for idx, row in df.iterrows():
@@ -113,16 +115,15 @@ def find_table_boundaries(df, site_id, cmo_column_dict):
 
     # 60% null-ratio filter on expected columns only
     final_data = data.copy()
-    if expected_columns:
-        data_cols_lower = [col.lower() for col in final_data.columns]
-        relevant_cols = [
-            col for col, col_l in zip(final_data.columns, data_cols_lower)
-            if col_l in expected_columns
-        ]
-        if relevant_cols:
-            null_ratio = final_data[relevant_cols].isna().sum(axis=1) / len(relevant_cols)
-            filtered = final_data[null_ratio <= 0.6]
-            final_data = data if filtered.empty else filtered
+    data_cols_lower = [col.lower() for col in final_data.columns]
+    relevant_cols = [
+        col for col, col_l in zip(final_data.columns, data_cols_lower)
+        if col_l in expected_columns
+    ]
+    if relevant_cols:
+        null_ratio = final_data[relevant_cols].isna().sum(axis=1) / len(relevant_cols)
+        filtered = final_data[null_ratio <= 0.6]
+        final_data = data if filtered.empty else filtered
 
     return {
         "start_row": start_row,

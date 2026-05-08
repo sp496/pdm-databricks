@@ -127,7 +127,7 @@ def main():
         # Step through each cleaning stage — comment out any that aren't
         # ported yet and re-run to isolate behaviour.
         # ----------------------------------------------------------------
-        boundaries = eu.find_table_boundaries(df_raw, SITE_ID, cmo_column_dict)
+        boundaries = eu.find_table_boundaries(df_raw, cmo_column_dict.get(SITE_ID, []))
         if boundaries:
             data = boundaries["data"]
             header = boundaries.get("header")
@@ -142,7 +142,7 @@ def main():
         data = eu.remove_aggregate_rows(data)
         data = eu.remove_special_characters(data)
 
-        data["site_id"] = SITE_ID
+        data["3pl"] = SITE_ID
         data["segment"] = SEGMENT
 
         logger.info(f"  Final shape: {data.shape}")

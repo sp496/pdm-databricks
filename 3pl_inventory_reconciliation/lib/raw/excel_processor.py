@@ -63,7 +63,7 @@ def process_3pl_file(
             print(f"    Skipping empty sheet '{sheet}'")
             continue
 
-        boundaries = eu.find_table_boundaries(df, site_id, cmo_column_dict)
+        boundaries = eu.find_table_boundaries(df, cmo_column_dict.get(site_id, []))
         if boundaries:
             data = boundaries["data"]
             header = boundaries.get("header")
@@ -76,7 +76,7 @@ def process_3pl_file(
             print(f"    No table boundaries found in '{sheet}', writing raw")
             data = df
 
-        data["site_id"] = site_id
+        data["3pl"] = site_id
         data["segment"] = segment
 
         sheet_slug = sheet.strip().replace(" ", "_") or "sheet"
