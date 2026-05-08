@@ -26,9 +26,10 @@ _THIS_DIR     = os.path.dirname(os.path.abspath(__file__))   # .../tests/unit
 _TESTS_DIR    = os.path.dirname(_THIS_DIR)                   # .../tests
 _PROJECT_ROOT = os.path.dirname(_TESTS_DIR)                  # .../3pl_inventory_reconciliation
 _REPO_ROOT    = os.path.dirname(_PROJECT_ROOT)               # .../pdm-databricks
-for _p in [_PROJECT_ROOT, _REPO_ROOT]:
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+for _p in [_REPO_ROOT, _PROJECT_ROOT]:  # PROJECT_ROOT inserted last → ends up at position 0
+    if _p in sys.path:
+        sys.path.remove(_p)
+    sys.path.insert(0, _p)
 
 import pandas as pd
 from lib.raw import excel_utils as eu
