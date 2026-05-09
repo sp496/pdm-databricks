@@ -1,14 +1,14 @@
 """Load and combine API + DP header mapping workbooks for a quarter.
 
 Produces:
-    header_mapping_df: combined DataFrame with CMO_Type and Segment columns
-    cmo_column_dict:   {site_id: [expected column headers]} (flattened)
-    cmo_sheet_dict:    {site_id: [expected sheet names lowercased]}
+    header_mapping_df: combined DataFrame with Type and Segment columns
+    column_dict:   {site_id: [expected column headers]} (flattened)
+    sheet_dict:    {site_id: [expected sheet names lowercased]}
 """
 import os
 import pandas as pd
 
-from lib.raw.excel_utils import flattened_cmo_column_dict
+from lib.raw.excel_utils import flattened_column_dict
 
 _SITE_ID_COL    = "3PL"
 _COL_HEADER_COL = "3PL Column Header"
@@ -34,17 +34,17 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
         sheet_name: name of the header-mapping sheet within each workbook
 
     Returns:
-        (header_mapping_df, cmo_column_dict, cmo_sheet_dict)
+        (header_mapping_df, column_dict, sheet_dict)
     """
     frames = []
     for segment, paths in mapping_paths_by_segment.items():
-        for cmo_type_key, cmo_type_label in (("dp", "DP"), ("api", "API")):
-            file_path = paths.get(cmo_type_key)
+        for type_key, type_label in (("dp", "DP"), ("api", "API")):
+            file_path = paths.get(type_key)
             if not file_path:
-                print(f"  No {cmo_type_key.upper()} mapping for segment '{segment}', skipping")
+                print(f"  No {type_key.upper()} mapping for segment '{segment}', skipping")
                 continue
             df = _load_sheet(file_path, sheet_name).assign(
-                CMO_Type=cmo_type_label, Segment=segment
+                CMO_Type=type_label, Segment=segment
             )
             frames.append(df)
 
@@ -57,14 +57,14 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
     raw_column_dict = (
         header_mapping_df.groupby(_SITE_ID_COL)[_COL_HEADER_COL].apply(list).to_dict()
     )
-    cmo_column_dict = flattened_cmo_column_dict(raw_column_dict)
+    column_dict = flattened_column_dict(raw_column_dict)
 
     header_mapping_df[_SHEET_NAME_COL] = (
         header_mapping_df.groupby(_SITE_ID_COL)[_SHEET_NAME_COL].ffill().str.lower()
     )
     header_mapping_df[_SHEET_NAME_COL] = header_mapping_df[_SHEET_NAME_COL].replace("nan", None)
 
-    cmo_sheet_dict = (
+    sheet_dict = (
         header_mapping_df.groupby(_SITE_ID_COL)[_SHEET_NAME_COL]
         .apply(
             lambda x: sorted(
@@ -74,4 +74,4 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
         .to_dict()
     )
 
-    return header_mapping_df, cmo_column_dict, cmo_sheet_dict
+    return header_mapping_df, column_dict, sheet_dict

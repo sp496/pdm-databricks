@@ -1,5 +1,4 @@
 # Databricks notebook source
-# MAGIC %pip install openpyxl xlrd
 
 # COMMAND ----------
 
@@ -88,10 +87,10 @@ resolved_mapping_paths = {
     seg: {k: _dbfs_path(v.replace("dbfs:", "")) if v else v for k, v in paths.items()}
     for seg, paths in mapping_paths.items()
 }
-header_mapping_df, cmo_column_dict, cmo_sheet_dict = load_quarter_mappings(
+header_mapping_df, column_dict, sheet_dict = load_quarter_mappings(
     resolved_mapping_paths, header_sheet_name
 )
-print(f"CMOs in mapping: {sorted(cmo_sheet_dict.keys())}")
+print(f"3PLs in mapping: {sorted(sheet_dict.keys())}")
 
 # COMMAND ----------
 
@@ -110,7 +109,7 @@ for entry in files_3pl:
     out_dir = f"{target_quarter_root}/3pl_files/{segment}/{site_id}"
     print(f"\nProcessing {segment}/{site_id}")
     try:
-        sheets = process_3pl_file(src_path, site_id, segment, cmo_sheet_dict, cmo_column_dict)
+        sheets = process_3pl_file(src_path, site_id, segment, sheet_dict, column_dict)
         dbutils.fs.mkdirs(f"dbfs:{out_dir}")
         for sheet_slug, data in sheets:
             out_path = _dbfs_path(f"{out_dir}/{sheet_slug}.csv")

@@ -12,7 +12,7 @@ def _to_dbfs_read_path(path):
     return f"/dbfs{path}"
 
 
-def process_3pl_file(file_path, site_id, segment, cmo_sheet_dict, cmo_column_dict):
+def process_3pl_file(file_path, site_id, segment, sheet_dict, column_dict):
     """Process a single 3PL inventory workbook, returning one DataFrame per relevant sheet.
 
     Returns:
@@ -23,7 +23,7 @@ def process_3pl_file(file_path, site_id, segment, cmo_sheet_dict, cmo_column_dic
     xls = pd.ExcelFile(read_path)
     sheet_names = xls.sheet_names
     is_single_sheet = len(sheet_names) == 1
-    allowed_sheets = cmo_sheet_dict.get(site_id, [])
+    allowed_sheets = sheet_dict.get(site_id, [])
 
     results = []
     for sheet in sheet_names:
@@ -37,7 +37,7 @@ def process_3pl_file(file_path, site_id, segment, cmo_sheet_dict, cmo_column_dic
             print(f"    Skipping empty sheet '{sheet}'")
             continue
 
-        boundaries = eu.find_table_boundaries(df, cmo_column_dict.get(site_id, []))
+        boundaries = eu.find_table_boundaries(df, column_dict.get(site_id, []))
         if boundaries:
             data = boundaries["data"]
             header = boundaries.get("header")

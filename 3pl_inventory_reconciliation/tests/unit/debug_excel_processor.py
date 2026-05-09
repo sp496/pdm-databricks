@@ -68,15 +68,15 @@ def _load_mapping(file_path, sheet_name):
         logger.warning(f"Mapping file not found, all sheets will be processed: {file_path}")
         return {}, {}
     df = pd.read_excel(file_path, sheet_name=sheet_name, dtype=str)
-    cmo_column_dict = df.groupby("3PL")["3PL Column Header"].apply(list).to_dict()
+    column_dict = df.groupby("3PL")["3PL Column Header"].apply(list).to_dict()
     df["Sheet Name"] = df.groupby("3PL")["Sheet Name"].ffill().str.lower()
     df["Sheet Name"] = df["Sheet Name"].replace("nan", None)
-    cmo_sheet_dict = (
+    sheet_dict = (
         df.groupby("3PL")["Sheet Name"]
         .apply(lambda x: sorted({s.strip() for name in x.dropna() for s in name.split(",")}))
         .to_dict()
     )
-    return cmo_column_dict, cmo_sheet_dict
+    return column_dict, sheet_dict
 
 
 def _write_output(df, site_id, sheet_slug):
@@ -105,8 +105,8 @@ def main():
     logger.info(f"Site ID : {SITE_ID}")
     logger.info(f"Segment : {SEGMENT}")
 
-    cmo_column_dict, cmo_sheet_dict = _load_mapping(MAPPING_FILE, MAPPING_SHEET_NAME)
-    allowed_sheets = cmo_sheet_dict.get(SITE_ID, [])
+    column_dict, sheet_dict = _load_mapping(MAPPING_FILE, MAPPING_SHEET_NAME)
+    allowed_sheets = sheet_dict.get(SITE_ID, [])
     logger.info(f"Allowed sheets from mapping: {allowed_sheets or '(all)'}")
 
     xls = pd.ExcelFile(SAMPLE_FILE)
@@ -127,7 +127,7 @@ def main():
         # Step through each cleaning stage — comment out any that aren't
         # ported yet and re-run to isolate behaviour.
         # ----------------------------------------------------------------
-        boundaries = eu.find_table_boundaries(df_raw, cmo_column_dict.get(SITE_ID, []))
+        boundaries = eu.find_table_boundaries(df_raw, column_dict.get(SITE_ID, []))
         if boundaries:
             data = boundaries["data"]
             header = boundaries.get("header")

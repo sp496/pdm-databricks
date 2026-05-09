@@ -8,13 +8,13 @@ import pandas as pd
 # Column-dict helpers
 # ---------------------------------------------------------------------------
 
-def flattened_cmo_column_dict(cmo_column_dict):
+def flattened_column_dict(column_dict):
     """Flatten comma/plus-separated column header entries into individual strings.
 
     e.g. {"1121": ["Lot No., Supplier Lot", "Qty"]} → {"1121": ["Lot No.", "Supplier Lot", "Qty"]}
     """
     result = {}
-    for site_id, column_list in cmo_column_dict.items():
+    for site_id, column_list in column_dict.items():
         flat = []
         for item in column_list:
             if item is None or (isinstance(item, float) and pd.isna(item)):
