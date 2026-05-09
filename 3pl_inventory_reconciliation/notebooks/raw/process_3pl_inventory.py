@@ -22,6 +22,11 @@ from lib.raw.mapping_loader import load_quarter_mappings
 from lib.raw.excel_processor import process_3pl_file
 from common.config_loader import load_config
 
+
+def _dbfs_path(path):
+    """Convert a mount path to its FUSE-accessible /dbfs equivalent for pandas I/O."""
+    return path if path.startswith("/dbfs") else f"/dbfs{path}"
+
 # COMMAND ----------
 
 env = dbutils.widgets.get("DATAENV")
@@ -79,8 +84,12 @@ dbutils.fs.rm(f"dbfs:{target_quarter_root}", recurse=True)
 mapping_paths = discover_mapping_files(dbutils, quarter_root, segments)
 print(f"Mapping paths: {mapping_paths}")
 
+resolved_mapping_paths = {
+    seg: {k: _dbfs_path(v.replace("dbfs:", "")) if v else v for k, v in paths.items()}
+    for seg, paths in mapping_paths.items()
+}
 header_mapping_df, cmo_column_dict, cmo_sheet_dict = load_quarter_mappings(
-    mapping_paths, header_sheet_name
+    resolved_mapping_paths, header_sheet_name
 )
 print(f"CMOs in mapping: {sorted(cmo_sheet_dict.keys())}")
 
@@ -101,15 +110,12 @@ for entry in files_3pl:
     out_dir = f"{target_quarter_root}/3pl_files/{segment}/{site_id}"
     print(f"\nProcessing {segment}/{site_id}")
     try:
-        process_3pl_file(
-            dbutils,
-            src_path,
-            out_dir,
-            site_id,
-            segment,
-            cmo_sheet_dict,
-            cmo_column_dict,
-        )
+        sheets = process_3pl_file(src_path, site_id, segment, cmo_sheet_dict, cmo_column_dict)
+        dbutils.fs.mkdirs(f"dbfs:{out_dir}")
+        for sheet_slug, data in sheets:
+            out_path = _dbfs_path(f"{out_dir}/{sheet_slug}.csv")
+            data.to_csv(out_path, index=False, encoding="utf-8")
+            print(f"    Wrote {out_path}")
     except Exception as e:
         print(f"  ERROR processing {segment}/{site_id}: {e}")
 

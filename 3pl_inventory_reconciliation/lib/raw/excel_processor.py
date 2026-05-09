@@ -1,5 +1,4 @@
 """Excel → CSV processing for 3PL inventory and SAP report files."""
-import os
 import pandas as pd
 
 from lib.raw import excel_utils as eu
@@ -13,37 +12,11 @@ def _to_dbfs_read_path(path):
     return f"/dbfs{path}"
 
 
-def _to_dbfs_write_path(path):
-    return path if path.startswith("/dbfs") else f"/dbfs{path.lstrip('/')}"
+def process_3pl_file(file_path, site_id, segment, cmo_sheet_dict, cmo_column_dict):
+    """Process a single 3PL inventory workbook, returning one DataFrame per relevant sheet.
 
-
-def _ensure_dir(dbutils, dbfs_dir):
-    target = dbfs_dir.replace("/dbfs/", "dbfs:/", 1) if dbfs_dir.startswith("/dbfs/") else dbfs_dir
-    try:
-        dbutils.fs.mkdirs(target)
-    except Exception as e:
-        if "Directory already exists" not in str(e):
-            print(f"  Warning: could not create {target}: {e}")
-
-
-def process_3pl_file(
-    dbutils,
-    file_path,
-    output_dir,
-    site_id,
-    segment,
-    cmo_sheet_dict,
-    cmo_column_dict,
-):
-    """Process a single 3PL inventory workbook into one CSV per relevant sheet.
-
-    Args:
-        file_path:        source xlsx path (dbfs:/... or /dbfs/...)
-        output_dir:       destination directory (dbfs path, no trailing slash needed)
-        site_id:          3PL site id (folder name); used to look up sheet/column mappings
-        segment:          'clinical' | 'commercial'
-        cmo_sheet_dict:   {site_id: [allowed sheet names lowercased]}
-        cmo_column_dict:  {site_id: [expected column headers]}
+    Returns:
+        list of (sheet_slug, DataFrame) tuples
     """
     read_path = _to_dbfs_read_path(file_path)
     print(f"  Reading {read_path}")
@@ -52,6 +25,7 @@ def process_3pl_file(
     is_single_sheet = len(sheet_names) == 1
     allowed_sheets = cmo_sheet_dict.get(site_id, [])
 
+    results = []
     for sheet in sheet_names:
         sheet_lc = sheet.strip().lower()
         if not ((not allowed_sheets and is_single_sheet) or sheet_lc in allowed_sheets):
@@ -80,15 +54,13 @@ def process_3pl_file(
         data["segment"] = segment
 
         sheet_slug = sheet.strip().replace(" ", "_") or "sheet"
-        out_subdir = output_dir.rstrip("/")
-        _ensure_dir(dbutils, out_subdir)
-        out_path = _to_dbfs_write_path(f"{out_subdir}/{sheet_slug}.csv")
-        data.to_csv(out_path, index=False, encoding="utf-8")
-        print(f"    Wrote {out_path}")
+        results.append((sheet_slug, data))
+
+    return results
 
 
-def process_sap_file(dbutils, file_path, output_dir, output_filename):
-    """Process the quarterly SAP report into a single CSV."""
+def process_sap_file(file_path):
+    """Process the quarterly SAP report, returning a cleaned DataFrame."""
     read_path = _to_dbfs_read_path(file_path)
     print(f"  Reading {read_path}")
     df = pd.read_excel(read_path, header=None, engine="openpyxl")
@@ -99,8 +71,4 @@ def process_sap_file(dbutils, file_path, output_dir, output_filename):
     df = eu.remove_aggregate_rows(df)
     df = eu.remove_special_characters(df)
 
-    out_subdir = output_dir.rstrip("/")
-    _ensure_dir(dbutils, out_subdir)
-    out_path = _to_dbfs_write_path(f"{out_subdir}/{output_filename}")
-    df.to_csv(out_path, index=False, encoding="utf-8")
-    print(f"  Wrote {out_path}")
+    return df

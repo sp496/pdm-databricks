@@ -17,6 +17,11 @@ from lib.raw.discovery import get_latest_completed_quarter, discover_sap_file
 from lib.raw.excel_processor import process_sap_file
 from common.config_loader import load_config
 
+
+def _dbfs_path(path):
+    """Convert a mount path to its FUSE-accessible /dbfs equivalent for pandas I/O."""
+    return path if path.startswith("/dbfs") else f"/dbfs{path}"
+
 # COMMAND ----------
 
 env = dbutils.widgets.get("DATAENV")
@@ -75,7 +80,11 @@ if not sap_path:
 
 print(f"SAP source: {sap_path}")
 sap_out_name = os.path.basename(sap_path).replace(".xlsx", ".csv").replace(".xls", ".csv")
-process_sap_file(dbutils, sap_path, sap_out_dir, sap_out_name)
+df = process_sap_file(sap_path)
+dbutils.fs.mkdirs(f"dbfs:{sap_out_dir}")
+out_path = _dbfs_path(f"{sap_out_dir}/{sap_out_name}")
+df.to_csv(out_path, index=False, encoding="utf-8")
+print(f"  Wrote {out_path}")
 
 # COMMAND ----------
 

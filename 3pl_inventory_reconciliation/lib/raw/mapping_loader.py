@@ -16,18 +16,13 @@ _SHEET_NAME_COL = "Sheet Name"
 
 
 def _load_sheet(file_path, sheet_name):
-    dbfs_path = f"/dbfs{file_path}" if not file_path.startswith("/dbfs") else file_path
-    if not os.path.exists(dbfs_path):
-        raise FileNotFoundError(f"Mapping file not found: {dbfs_path}")
-    sheets = pd.read_excel(dbfs_path, sheet_name=None, dtype=str)
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Mapping file not found: {file_path}")
+    sheets = pd.read_excel(file_path, sheet_name=None, dtype=str)
     df = sheets.get(sheet_name)
     if df is None:
-        raise ValueError(f"Sheet '{sheet_name}' not found in {dbfs_path}")
+        raise ValueError(f"Sheet '{sheet_name}' not found in {file_path}")
     return df
-
-
-def _strip_dbfs_prefix(path):
-    return path.replace("dbfs:", "") if path and path.startswith("dbfs:") else path
 
 
 def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
@@ -35,6 +30,7 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
 
     Args:
         mapping_paths_by_segment: {segment: {"api": path, "dp": path}}
+            Paths must be local-filesystem paths (e.g. /dbfs/mnt/...).
         sheet_name: name of the header-mapping sheet within each workbook
 
     Returns:
@@ -47,7 +43,6 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
             if not file_path:
                 print(f"  No {cmo_type_key.upper()} mapping for segment '{segment}', skipping")
                 continue
-            file_path = _strip_dbfs_prefix(file_path)
             df = _load_sheet(file_path, sheet_name).assign(
                 CMO_Type=cmo_type_label, Segment=segment
             )
