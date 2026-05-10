@@ -27,10 +27,6 @@ def is_quarter_complete(year, quarter, today=None):
     return today > date(year, month, day)
 
 
-def _list_dir(dbutils, path):
-    return dbutils.fs.ls(path)
-
-
 def get_latest_completed_quarter(dbutils, root_directory, today=None):
     """Return (year_str, quarter_str) for the most recent fully-completed quarter under root.
 
@@ -39,7 +35,7 @@ def get_latest_completed_quarter(dbutils, root_directory, today=None):
     year_dirs = sorted(
         [
             int(PurePath(d.path).name)
-            for d in _list_dir(dbutils, root_directory)
+            for d in dbutils.fs.ls(root_directory)
             if PurePath(d.path).name.isdigit() and len(PurePath(d.path).name) == 4
         ],
         reverse=True,
@@ -52,7 +48,7 @@ def get_latest_completed_quarter(dbutils, root_directory, today=None):
         quarter_dirs = sorted(
             [
                 PurePath(d.path).name
-                for d in _list_dir(dbutils, year_path)
+                for d in dbutils.fs.ls(year_path)
                 if re.fullmatch(r"Q[1-4]", PurePath(d.path).name)
             ],
             key=lambda q: int(q[1:]),
@@ -71,7 +67,7 @@ def latest_file_in_dir(dbutils, folder_path):
     """
     latest_path = None
     latest_mtime = None
-    for entry in _list_dir(dbutils, folder_path):
+    for entry in dbutils.fs.ls(folder_path):
         if entry.path.endswith("/"):
             continue
         name = os.path.basename(entry.path)
@@ -94,7 +90,7 @@ def discover_3pl_files(dbutils, quarter_root, segments):
     for segment in segments:
         seg_path = os.path.join(base, segment)
         try:
-            site_dirs = [d for d in _list_dir(dbutils, seg_path) if d.path.endswith("/")]
+            site_dirs = [d for d in dbutils.fs.ls(seg_path) if d.path.endswith("/")]
         except Exception as e:
             print(f"  No data for segment '{segment}' at {seg_path}: {e}")
             continue
@@ -116,7 +112,7 @@ def discover_mapping_files(dbutils, quarter_root, segments):
         seg_path = os.path.join(base, segment)
         seg_map = {"api": None, "dp": None}
         try:
-            entries = _list_dir(dbutils, seg_path)
+            entries = dbutils.fs.ls(seg_path)
         except Exception as e:
             print(f"  No mapping files for segment '{segment}' at {seg_path}: {e}")
             out[segment] = seg_map
