@@ -91,7 +91,7 @@ def main():
     # Process 3PL inventory file
     # -----------------------------------------------------------------------
     logger.info(f"\n--- process_3pl_file: {SAMPLE_FILE} ---")
-    sheets = process_3pl_file(SAMPLE_FILE, SITE_ID, SEGMENT, site_sheet_mapping)
+    sheets = process_3pl_file(SAMPLE_FILE, SITE_ID, site_sheet_mapping)
 
     for sheet_slug, data in sheets:
         logger.info(f"  Sheet '{sheet_slug}' → shape {data.shape}")

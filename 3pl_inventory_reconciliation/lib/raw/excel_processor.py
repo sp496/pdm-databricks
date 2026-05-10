@@ -4,13 +4,12 @@ import pandas as pd
 from lib.raw import excel_utils as eu
 
 
-def process_3pl_file(file_path, site_id, segment, site_sheet_mapping):
+def process_3pl_file(file_path, site_id, site_sheet_mapping):
     """Process a single 3PL inventory workbook, returning one DataFrame per relevant sheet.
 
     Args:
         file_path:          plain readable path to the source xlsx
         site_id:            3PL site id; used to look up sheet/column mappings
-        segment:            'clinical' | 'commercial'
         site_sheet_mapping: {site_id: {sheet_name: [expected_columns]}}
 
     Returns:
@@ -59,9 +58,6 @@ def process_3pl_file(file_path, site_id, segment, site_sheet_mapping):
         else:
             print(f"    No table boundaries found in '{sheet}', writing raw")
             data = df
-
-        data["3pl"] = site_id
-        data["segment"] = segment
 
         sheet_slug = sheet.strip().replace(" ", "_") or "sheet"
         results.append((sheet_slug, data))
