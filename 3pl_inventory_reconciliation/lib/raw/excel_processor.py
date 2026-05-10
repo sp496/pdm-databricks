@@ -12,7 +12,7 @@ def process_3pl_file(file_path, sheet_mapping):
         sheet_mapping: {sheet_name: [expected_columns]} for this site, or None to skip
 
     Returns:
-        list of (sheet_slug, DataFrame) tuples
+        dict of {sheet_slug: DataFrame}
     """
     if sheet_mapping is None:
         print(f"  Skipping {file_path} (site not found in mapping)")
@@ -24,7 +24,7 @@ def process_3pl_file(file_path, sheet_mapping):
     is_single_sheet = len(sheet_names) == 1
     named_sheets = {k: v for k, v in sheet_mapping.items() if k is not None}
 
-    results = []
+    results = {}
     for sheet in sheet_names:
         sheet_lc = sheet.strip().lower()
 
@@ -58,7 +58,7 @@ def process_3pl_file(file_path, sheet_mapping):
             data = df
 
         sheet_slug = sheet.strip().replace(" ", "_") or "sheet"
-        results.append((sheet_slug, data))
+        results[sheet_slug] = data
 
     return results
 

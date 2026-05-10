@@ -94,7 +94,7 @@ def main():
     logger.info(f"\n--- process_3pl_file: {SAMPLE_FILE} ---")
     sheets = process_3pl_file(SAMPLE_FILE, sheet_mapping)
 
-    for sheet_slug, data in sheets:
+    for sheet_slug, data in sheets.items():
         logger.info(f"  Sheet '{sheet_slug}' → shape {data.shape}")
         logger.info(f"  Columns: {list(data.columns)}")
         print(f"\nFirst 5 rows of '{sheet_slug}':")

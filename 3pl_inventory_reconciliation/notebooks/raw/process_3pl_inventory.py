@@ -113,7 +113,7 @@ for entry in files_3pl:
     try:
         sheets = process_3pl_file(_dbfs_path(src_path), site_sheet_mapping.get(site_id))
         dbutils.fs.mkdirs(f"dbfs:{out_dir}")
-        for sheet_slug, data in sheets:
+        for sheet_slug, data in sheets.items():
             out_path = _dbfs_path(f"{out_dir}/{sheet_slug}.csv")
             data.to_csv(out_path, index=False, encoding="utf-8")
             print(f"    Wrote {out_path}")
