@@ -84,14 +84,14 @@ def main():
     # -----------------------------------------------------------------------
     logger.info("\n--- Loading mappings ---")
     mapping_paths = {SEGMENT: {"api": MAPPING_FILE_API, "dp": MAPPING_FILE_DP}}
-    _, column_dict, sheet_dict = load_quarter_mappings(mapping_paths, MAPPING_SHEET_NAME)
-    logger.info(f"  Allowed sheets for {SITE_ID}: {sheet_dict.get(SITE_ID, '(all)')}")
+    _, site_sheet_mapping = load_quarter_mappings(mapping_paths, MAPPING_SHEET_NAME)
+    logger.info(f"  Sheet/column mapping for {SITE_ID}: {site_sheet_mapping.get(SITE_ID, '(none)')}")
 
     # -----------------------------------------------------------------------
     # Process 3PL inventory file
     # -----------------------------------------------------------------------
     logger.info(f"\n--- process_3pl_file: {SAMPLE_FILE} ---")
-    sheets = process_3pl_file(SAMPLE_FILE, SITE_ID, SEGMENT, sheet_dict, column_dict)
+    sheets = process_3pl_file(SAMPLE_FILE, SITE_ID, SEGMENT, site_sheet_mapping)
 
     for sheet_slug, data in sheets:
         logger.info(f"  Sheet '{sheet_slug}' → shape {data.shape}")

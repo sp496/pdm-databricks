@@ -4,15 +4,14 @@ import pandas as pd
 from lib.raw import excel_utils as eu
 
 
-def process_3pl_file(file_path, site_id, segment, sheet_dict, column_dict):
+def process_3pl_file(file_path, site_id, segment, site_sheet_mapping):
     """Process a single 3PL inventory workbook, returning one DataFrame per relevant sheet.
 
     Args:
-        file_path:    plain readable path to the source xlsx
-        site_id:      3PL site id; used to look up sheet/column mappings
-        segment:      'clinical' | 'commercial'
-        sheet_dict:   {site_id: [allowed sheet names lowercased]}
-        column_dict:  {site_id: [expected column headers]}
+        file_path:          plain readable path to the source xlsx
+        site_id:            3PL site id; used to look up sheet/column mappings
+        segment:            'clinical' | 'commercial'
+        site_sheet_mapping: {site_id: {sheet_name: [expected_columns]}}
 
     Returns:
         list of (sheet_slug, DataFrame) tuples
@@ -21,12 +20,12 @@ def process_3pl_file(file_path, site_id, segment, sheet_dict, column_dict):
     xls = pd.ExcelFile(file_path)
     sheet_names = xls.sheet_names
     is_single_sheet = len(sheet_names) == 1
-    allowed_sheets = sheet_dict.get(site_id, [])
+    site_mapping = site_sheet_mapping.get(site_id, {})
 
     results = []
     for sheet in sheet_names:
         sheet_lc = sheet.strip().lower()
-        if not ((not allowed_sheets and is_single_sheet) or sheet_lc in allowed_sheets):
+        if not ((not site_mapping and is_single_sheet) or sheet_lc in site_mapping):
             print(f"    Skipping sheet '{sheet}' (not in mapping for site {site_id})")
             continue
 
@@ -35,7 +34,7 @@ def process_3pl_file(file_path, site_id, segment, sheet_dict, column_dict):
             print(f"    Skipping empty sheet '{sheet}'")
             continue
 
-        boundaries = eu.find_table_boundaries(df, column_dict.get(site_id, []))
+        boundaries = eu.find_table_boundaries(df, site_mapping.get(sheet_lc, []))
         if boundaries:
             data = boundaries["data"]
             header = boundaries.get("header")

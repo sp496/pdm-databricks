@@ -1,14 +1,12 @@
 """Load and combine API + DP header mapping workbooks for a quarter.
 
 Produces:
-    header_mapping_df: combined DataFrame with Type and Segment columns
-    column_dict:   {site_id: [expected column headers]} (flattened)
-    sheet_dict:    {site_id: [expected sheet names lowercased]}
+    header_mapping_df:  combined DataFrame with CMO_Type and Segment columns
+    site_sheet_mapping: {site_id: {sheet_name: [expected_columns]}}
 """
 import os
+import re
 import pandas as pd
-
-from lib.raw.excel_utils import flattened_column_dict
 
 _SITE_ID_COL    = "3PL"
 _COL_HEADER_COL = "3PL Column Header"
@@ -25,6 +23,13 @@ def _load_sheet(file_path, sheet_name):
     return df
 
 
+def _split_items(raw, sep):
+    """Split a raw cell value on sep, returning stripped non-empty parts."""
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return []
+    return [s.strip() for s in re.split(sep, str(raw)) if s.strip()]
+
+
 def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
     """Load and combine API+DP mapping files across all segments.
 
@@ -34,7 +39,8 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
         sheet_name: name of the header-mapping sheet within each workbook
 
     Returns:
-        (header_mapping_df, column_dict, sheet_dict)
+        (header_mapping_df, site_sheet_mapping)
+        where site_sheet_mapping = {site_id: {sheet_name: [expected_columns]}}
     """
     frames = []
     for segment, paths in mapping_paths_by_segment.items():
@@ -54,24 +60,26 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
     header_mapping_df = pd.concat(frames, ignore_index=True)
     print(f"  Loaded {len(header_mapping_df)} header-mapping rows across segments")
 
-    raw_column_dict = (
-        header_mapping_df.groupby(_SITE_ID_COL)[_COL_HEADER_COL].apply(list).to_dict()
-    )
-    column_dict = flattened_column_dict(raw_column_dict)
-
     header_mapping_df[_SHEET_NAME_COL] = (
         header_mapping_df.groupby(_SITE_ID_COL)[_SHEET_NAME_COL].ffill().str.lower()
     )
     header_mapping_df[_SHEET_NAME_COL] = header_mapping_df[_SHEET_NAME_COL].replace("nan", None)
 
-    sheet_dict = (
-        header_mapping_df.groupby(_SITE_ID_COL)[_SHEET_NAME_COL]
-        .apply(
-            lambda x: sorted(
-                {s.strip() for name in x.dropna() for s in name.split(",")}
-            )
-        )
-        .to_dict()
-    )
+    site_sheet_mapping = {}
+    for _, row in header_mapping_df.iterrows():
+        site_id    = row[_SITE_ID_COL]
+        sheet_names = _split_items(row[_SHEET_NAME_COL], sep=r",")
+        columns     = _split_items(row[_COL_HEADER_COL], sep=r"[,+]")
 
-    return header_mapping_df, column_dict, sheet_dict
+        if not sheet_names:
+            continue
+
+        if site_id not in site_sheet_mapping:
+            site_sheet_mapping[site_id] = {}
+
+        for sname in sheet_names:
+            if sname not in site_sheet_mapping[site_id]:
+                site_sheet_mapping[site_id][sname] = []
+            site_sheet_mapping[site_id][sname].extend(columns)
+
+    return header_mapping_df, site_sheet_mapping
