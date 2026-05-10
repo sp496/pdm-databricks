@@ -111,7 +111,7 @@ for entry in files_3pl:
     out_dir = f"{target_quarter_root}/3pl_files/{segment}/{site_id}"
     print(f"\nProcessing {segment}/{site_id}")
     try:
-        sheets = process_3pl_file(_dbfs_path(src_path), site_id, site_sheet_mapping)
+        sheets = process_3pl_file(_dbfs_path(src_path), site_sheet_mapping.get(site_id))
         dbutils.fs.mkdirs(f"dbfs:{out_dir}")
         for sheet_slug, data in sheets:
             out_path = _dbfs_path(f"{out_dir}/{sheet_slug}.csv")

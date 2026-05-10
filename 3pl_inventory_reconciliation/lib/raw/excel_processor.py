@@ -4,27 +4,25 @@ import pandas as pd
 from lib.raw import excel_utils as eu
 
 
-def process_3pl_file(file_path, site_id, site_sheet_mapping):
+def process_3pl_file(file_path, sheet_mapping):
     """Process a single 3PL inventory workbook, returning one DataFrame per relevant sheet.
 
     Args:
-        file_path:          plain readable path to the source xlsx
-        site_id:            3PL site id; used to look up sheet/column mappings
-        site_sheet_mapping: {site_id: {sheet_name: [expected_columns]}}
+        file_path:     plain readable path to the source xlsx
+        sheet_mapping: {sheet_name: [expected_columns]} for this site, or None to skip
 
     Returns:
         list of (sheet_slug, DataFrame) tuples
     """
-    if site_id not in site_sheet_mapping:
-        print(f"  Skipping {file_path} (site {site_id} not found in mapping)")
+    if sheet_mapping is None:
+        print(f"  Skipping {file_path} (site not found in mapping)")
         return []
 
     print(f"  Reading {file_path}")
     xls = pd.ExcelFile(file_path)
     sheet_names = xls.sheet_names
     is_single_sheet = len(sheet_names) == 1
-    site_mapping = site_sheet_mapping[site_id]
-    named_sheets = {k: v for k, v in site_mapping.items() if k is not None}
+    named_sheets = {k: v for k, v in sheet_mapping.items() if k is not None}
 
     results = []
     for sheet in sheet_names:
@@ -32,11 +30,11 @@ def process_3pl_file(file_path, site_id, site_sheet_mapping):
 
         if named_sheets:
             if sheet_lc not in named_sheets:
-                print(f"    Skipping sheet '{sheet}' (not in mapping for site {site_id})")
+                print(f"    Skipping sheet '{sheet}' (not in mapping)")
                 continue
             columns = named_sheets[sheet_lc]
         elif is_single_sheet:
-            columns = site_mapping.get(None, [])
+            columns = sheet_mapping.get(None, [])
         else:
             print(f"    Skipping '{sheet}' (no sheet specified in mapping and file has multiple sheets)")
             continue
