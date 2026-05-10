@@ -41,6 +41,8 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
     Returns:
         (header_mapping_df, site_sheet_mapping)
         where site_sheet_mapping = {site_id: {sheet_name: [expected_columns]}}
+        sheet_name is None when no sheet was specified in the mapping (columns
+        apply to any single-sheet workbook for that site)
     """
     frames = []
     for segment, paths in mapping_paths_by_segment.items():
@@ -71,15 +73,14 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
         sheet_names = _split_items(row[_SHEET_NAME_COL], sep=r",")
         columns     = _split_items(row[_COL_HEADER_COL], sep=r"[,+]")
 
-        if not sheet_names:
-            continue
-
         if site_id not in site_sheet_mapping:
             site_sheet_mapping[site_id] = {}
 
-        for sname in sheet_names:
-            if sname not in site_sheet_mapping[site_id]:
-                site_sheet_mapping[site_id][sname] = []
-            site_sheet_mapping[site_id][sname].extend(columns)
+        # None key = columns with no sheet constraint (single-sheet files only)
+        keys = sheet_names if sheet_names else [None]
+        for key in keys:
+            if key not in site_sheet_mapping[site_id]:
+                site_sheet_mapping[site_id][key] = []
+            site_sheet_mapping[site_id][key].extend(columns)
 
     return header_mapping_df, site_sheet_mapping
