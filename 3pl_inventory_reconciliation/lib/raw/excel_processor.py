@@ -16,11 +16,15 @@ def process_3pl_file(file_path, site_id, segment, site_sheet_mapping):
     Returns:
         list of (sheet_slug, DataFrame) tuples
     """
+    if site_id not in site_sheet_mapping:
+        print(f"  Skipping {file_path} (site {site_id} not found in mapping)")
+        return []
+
     print(f"  Reading {file_path}")
     xls = pd.ExcelFile(file_path)
     sheet_names = xls.sheet_names
     is_single_sheet = len(sheet_names) == 1
-    site_mapping = site_sheet_mapping.get(site_id, {})
+    site_mapping = site_sheet_mapping[site_id]
     named_sheets = {k: v for k, v in site_mapping.items() if k is not None}
 
     results = []
