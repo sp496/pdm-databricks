@@ -23,7 +23,9 @@ from common.config_loader import load_config
 
 
 def _dbfs_path(path):
-    """Convert a mount path to its FUSE-accessible /dbfs equivalent for pandas I/O."""
+    """Convert a dbfs: or mount path to its FUSE-accessible /dbfs equivalent for pandas I/O."""
+    if path.startswith("dbfs:"):
+        return path.replace("dbfs:", "/dbfs", 1)
     return path if path.startswith("/dbfs") else f"/dbfs{path}"
 
 # COMMAND ----------
@@ -109,7 +111,7 @@ for entry in files_3pl:
     out_dir = f"{target_quarter_root}/3pl_files/{segment}/{site_id}"
     print(f"\nProcessing {segment}/{site_id}")
     try:
-        sheets = process_3pl_file(src_path, site_id, segment, sheet_dict, column_dict)
+        sheets = process_3pl_file(_dbfs_path(src_path), site_id, segment, sheet_dict, column_dict)
         dbutils.fs.mkdirs(f"dbfs:{out_dir}")
         for sheet_slug, data in sheets:
             out_path = _dbfs_path(f"{out_dir}/{sheet_slug}.csv")

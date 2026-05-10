@@ -4,23 +4,21 @@ import pandas as pd
 from lib.raw import excel_utils as eu
 
 
-def _to_dbfs_read_path(path):
-    if path.startswith("dbfs:"):
-        return path.replace("dbfs:", "/dbfs", 1)
-    if path.startswith("/dbfs"):
-        return path
-    return f"/dbfs{path}"
-
-
 def process_3pl_file(file_path, site_id, segment, sheet_dict, column_dict):
     """Process a single 3PL inventory workbook, returning one DataFrame per relevant sheet.
+
+    Args:
+        file_path:    plain readable path to the source xlsx
+        site_id:      3PL site id; used to look up sheet/column mappings
+        segment:      'clinical' | 'commercial'
+        sheet_dict:   {site_id: [allowed sheet names lowercased]}
+        column_dict:  {site_id: [expected column headers]}
 
     Returns:
         list of (sheet_slug, DataFrame) tuples
     """
-    read_path = _to_dbfs_read_path(file_path)
-    print(f"  Reading {read_path}")
-    xls = pd.ExcelFile(read_path)
+    print(f"  Reading {file_path}")
+    xls = pd.ExcelFile(file_path)
     sheet_names = xls.sheet_names
     is_single_sheet = len(sheet_names) == 1
     allowed_sheets = sheet_dict.get(site_id, [])
@@ -60,10 +58,13 @@ def process_3pl_file(file_path, site_id, segment, sheet_dict, column_dict):
 
 
 def process_sap_file(file_path):
-    """Process the quarterly SAP report, returning a cleaned DataFrame."""
-    read_path = _to_dbfs_read_path(file_path)
-    print(f"  Reading {read_path}")
-    df = pd.read_excel(read_path, header=None, engine="openpyxl")
+    """Process the quarterly SAP report, returning a cleaned DataFrame.
+
+    Args:
+        file_path: plain readable path to the source xlsx
+    """
+    print(f"  Reading {file_path}")
+    df = pd.read_excel(file_path, header=None, engine="openpyxl")
 
     df = eu.remove_rows_with_n_values(df, 1)
     df = eu.extract_first_dataframe(df)

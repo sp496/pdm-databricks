@@ -18,7 +18,9 @@ from common.config_loader import load_config
 
 
 def _dbfs_path(path):
-    """Convert a mount path to its FUSE-accessible /dbfs equivalent for pandas I/O."""
+    """Convert a dbfs: or mount path to its FUSE-accessible /dbfs equivalent for pandas I/O."""
+    if path.startswith("dbfs:"):
+        return path.replace("dbfs:", "/dbfs", 1)
     return path if path.startswith("/dbfs") else f"/dbfs{path}"
 
 # COMMAND ----------
@@ -79,7 +81,7 @@ if not sap_path:
 
 print(f"SAP source: {sap_path}")
 sap_out_name = os.path.basename(sap_path).replace(".xlsx", ".csv").replace(".xls", ".csv")
-df = process_sap_file(sap_path)
+df = process_sap_file(_dbfs_path(sap_path))
 dbutils.fs.mkdirs(f"dbfs:{sap_out_dir}")
 out_path = _dbfs_path(f"{sap_out_dir}/{sap_out_name}")
 df.to_csv(out_path, index=False, encoding="utf-8")
