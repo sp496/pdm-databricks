@@ -1,3 +1,4 @@
+# TODO: move _FileInfo and _FsMock to a shared tests/utils.py so other debug runners can reuse them
 """
 Local Debug Runner for 3PL Discovery
 =====================================
