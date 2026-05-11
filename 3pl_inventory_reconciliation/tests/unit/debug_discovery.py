@@ -12,19 +12,21 @@ PyCharm Setup (one-time):
      and ensure it has: pandas, openpyxl, xlrd   (pip install -r requirements.txt)
   3. Open this file and press the green Run/Debug button.
 
-Fixture layout (mirrors the real S3 structure):
+Fixture layout (mirrors the real S3 structure — segment-first):
   tests/fixtures/discovery/
-  └── 2026/
-      └── Q1/
-          ├── 3pl_files/
-          │   ├── clinical/
-          │   │   └── WRTRR1226/   ← drop any inventory xlsx here
-          │   └── commercial/
-          │       └── 1205/        ← drop any inventory xlsx here
-          ├── mapping_files/
-          │   ├── clinical/        ← api_mapping_*.xlsx, dp_mapping_*.xlsx
-          │   └── commercial/      ← api_mapping_*.xlsx, dp_mapping_*.xlsx
-          └── sap_report_files/    ← sap_report_*.xlsx
+  ├── clinical/
+  │   └── 2026/
+  │       └── Q1/
+  │           ├── 3pl_files/
+  │           │   └── WRTRR1226/   ← drop any inventory xlsx here
+  │           └── mapping_files/   ← api_mapping_*.xlsx, dp_mapping_*.xlsx
+  └── commercial/
+      └── 2026/
+          └── Q1/
+              ├── 3pl_files/
+              │   └── 1205/        ← drop any inventory xlsx here
+              ├── mapping_files/   ← api_mapping_*.xlsx, dp_mapping_*.xlsx
+              └── sap_report_files/ ← sap_report_*.xlsx
 """
 
 import os
@@ -95,43 +97,53 @@ def main():
         logger.error(f"Fixture root not found: {_DISCOVERY_ROOT}")
         return
 
-    # -----------------------------------------------------------------------
-    # 1. Resolve latest completed quarter
-    # -----------------------------------------------------------------------
-    logger.info("\n--- get_latest_completed_quarter ---")
-    year, quarter = get_latest_completed_quarter(dbutils, _DISCOVERY_ROOT, today=date.today())
-    logger.info(f"  Result: year={year}, quarter={quarter}")
+    for segment in SEGMENTS:
+        segment_root = os.path.join(_DISCOVERY_ROOT, segment)
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Segment: {segment}  ({segment_root})")
+        logger.info(f"{'='*60}")
 
-    if not year or not quarter:
-        logger.error("No completed quarter found — check fixture folder names (e.g. 2026/Q1).")
-        return
+        if not os.path.isdir(segment_root):
+            logger.warning(f"  Segment directory not found — skipping")
+            continue
 
-    quarter_root = os.path.join(_DISCOVERY_ROOT, year, quarter)
-    logger.info(f"  Quarter root: {quarter_root}")
+        # -------------------------------------------------------------------
+        # 1. Resolve latest completed quarter
+        # -------------------------------------------------------------------
+        logger.info("\n--- get_latest_completed_quarter ---")
+        year, quarter = get_latest_completed_quarter(dbutils, segment_root, today=date.today())
+        logger.info(f"  Result: year={year}, quarter={quarter}")
 
-    # -----------------------------------------------------------------------
-    # 2. Discover mapping files
-    # -----------------------------------------------------------------------
-    logger.info("\n--- discover_mapping_files ---")
-    mapping_paths = discover_mapping_files(dbutils, quarter_root, SEGMENTS)
-    for segment, paths in mapping_paths.items():
-        logger.info(f"  [{segment}]  api={paths.get('api')}  dp={paths.get('dp')}")
+        if not year or not quarter:
+            logger.error("  No completed quarter found — check fixture folder names (e.g. 2026/Q1).")
+            continue
 
-    # -----------------------------------------------------------------------
-    # 3. Discover 3PL inventory files
-    # -----------------------------------------------------------------------
-    logger.info("\n--- discover_3pl_files ---")
-    files_3pl = discover_3pl_files(dbutils, quarter_root, SEGMENTS)
-    logger.info(f"  Found {len(files_3pl)} file(s):")
-    for entry in files_3pl:
-        logger.info(f"  [{entry['segment']}] {entry['site_id']} → {entry['path']}")
+        quarter_root = os.path.join(segment_root, year, quarter)
+        logger.info(f"  Quarter root: {quarter_root}")
 
-    # -----------------------------------------------------------------------
-    # 4. Discover SAP report
-    # -----------------------------------------------------------------------
-    logger.info("\n--- discover_sap_file ---")
-    sap_path = discover_sap_file(dbutils, quarter_root)
-    logger.info(f"  SAP file: {sap_path}")
+        # -------------------------------------------------------------------
+        # 2. Discover mapping files
+        # -------------------------------------------------------------------
+        logger.info("\n--- discover_mapping_files ---")
+        mapping_paths = discover_mapping_files(dbutils, quarter_root)
+        logger.info(f"  api={mapping_paths.get('api')}  dp={mapping_paths.get('dp')}")
+
+        # -------------------------------------------------------------------
+        # 3. Discover 3PL inventory files
+        # -------------------------------------------------------------------
+        logger.info("\n--- discover_3pl_files ---")
+        files_3pl = discover_3pl_files(dbutils, quarter_root)
+        logger.info(f"  Found {len(files_3pl)} file(s):")
+        for site_id, path in files_3pl.items():
+            logger.info(f"  {site_id} → {path}")
+
+        # -------------------------------------------------------------------
+        # 4. Discover SAP report (commercial only)
+        # -------------------------------------------------------------------
+        if segment == "commercial":
+            logger.info("\n--- discover_sap_file ---")
+            sap_path = discover_sap_file(dbutils, quarter_root)
+            logger.info(f"  SAP file: {sap_path}")
 
     logger.info("\nDone.")
 

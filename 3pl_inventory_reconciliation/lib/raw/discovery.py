@@ -1,13 +1,13 @@
-"""Discovery utilities for traversing the CHAOS 3PL inventory landing structure.
+"""Discovery utilities for traversing the 3PL inventory landing structure.
 
-Source layout:
-    {root}/{year}/{quarter}/3pl_files/{segment}/{site_id}/{site_id}_inventory.xlsx
-    {root}/{year}/{quarter}/mapping_files/{segment}/{api|dp}_mapping_{year}_{quarter}.xlsx
-    {root}/{year}/{quarter}/sap_report_files/sap_report_{quarter}_{year}.xlsx
+Source layout (segment-first):
+    {root}/{segment}/{year}/{quarter}/3pl_files/{site_id}/{site_id}_inventory.xlsx
+    {root}/{segment}/{year}/{quarter}/mapping_files/{api|dp}_mapping_{year}_{quarter}.xlsx
+    {root}/{segment}/{year}/{quarter}/sap_report_files/sap_report_{quarter}_{year}.xlsx
 """
 import os
 import re
-from datetime import date, datetime
+from datetime import date
 from pathlib import PurePath
 
 
@@ -27,15 +27,15 @@ def is_quarter_complete(year, quarter, today=None):
     return today > date(year, month, day)
 
 
-def get_latest_completed_quarter(dbutils, root_directory, today=None):
-    """Return (year_str, quarter_str) for the most recent fully-completed quarter under root.
+def get_latest_completed_quarter(dbutils, segment_root, today=None):
+    """Return (year_str, quarter_str) for the most recent fully-completed quarter under segment_root.
 
     Years are 4-digit folders; quarters are Q1..Q4.
     """
     year_dirs = sorted(
         [
             int(PurePath(d.path).name)
-            for d in dbutils.fs.ls(root_directory)
+            for d in dbutils.fs.ls(segment_root)
             if PurePath(d.path).name.isdigit() and len(PurePath(d.path).name) == 4
         ],
         reverse=True,
@@ -44,7 +44,7 @@ def get_latest_completed_quarter(dbutils, root_directory, today=None):
         return None, None
 
     for year in year_dirs:
-        year_path = os.path.join(root_directory, str(year))
+        year_path = os.path.join(segment_root, str(year))
         quarter_dirs = sorted(
             [
                 PurePath(d.path).name
@@ -80,51 +80,44 @@ def latest_file_in_dir(dbutils, folder_path):
     return latest_path
 
 
-def discover_3pl_files(dbutils, quarter_root, segments):
-    """Walk 3pl_files/{segment}/{site_id}/ and return latest file per (segment, site_id).
+def discover_3pl_files(dbutils, quarter_root):
+    """Walk 3pl_files/{site_id}/ and return latest file per site_id.
 
-    Returns a list of dicts: {"segment", "site_id", "path"}.
+    Returns a dict: {site_id: path}.
     """
-    results = []
+    results = {}
     base = os.path.join(quarter_root, "3pl_files")
-    for segment in segments:
-        seg_path = os.path.join(base, segment)
-        try:
-            site_dirs = [d for d in dbutils.fs.ls(seg_path) if d.path.endswith("/")]
-        except Exception as e:
-            print(f"  No data for segment '{segment}' at {seg_path}: {e}")
+    try:
+        site_dirs = [d for d in dbutils.fs.ls(base) if d.path.endswith("/")]
+    except Exception as e:
+        print(f"  No 3PL files found at {base}: {e}")
+        return results
+    for site in site_dirs:
+        site_id = PurePath(site.path).name
+        latest = latest_file_in_dir(dbutils, site.path)
+        if latest is None:
+            print(f"  No files found for {site_id}")
             continue
-        for site in site_dirs:
-            site_id = PurePath(site.path).name
-            latest = latest_file_in_dir(dbutils, site.path)
-            if latest is None:
-                print(f"  No files found for {segment}/{site_id}")
-                continue
-            results.append({"segment": segment, "site_id": site_id, "path": latest})
+        results[site_id] = latest
     return results
 
 
-def discover_mapping_files(dbutils, quarter_root, segments):
-    """Return {segment: {"api": path, "dp": path}} for the quarter's mapping files."""
-    out = {}
-    base = os.path.join(quarter_root, "mapping_files")
-    for segment in segments:
-        seg_path = os.path.join(base, segment)
-        seg_map = {"api": None, "dp": None}
-        try:
-            entries = dbutils.fs.ls(seg_path)
-        except Exception as e:
-            print(f"  No mapping files for segment '{segment}' at {seg_path}: {e}")
-            out[segment] = seg_map
-            continue
-        for entry in entries:
-            name = os.path.basename(entry.path).lower()
-            if name.startswith("api_mapping"):
-                seg_map["api"] = entry.path
-            elif name.startswith("dp_mapping"):
-                seg_map["dp"] = entry.path
-        out[segment] = seg_map
-    return out
+def discover_mapping_files(dbutils, quarter_root):
+    """Return {"api": path, "dp": path} for the quarter's mapping files."""
+    seg_map = {"api": None, "dp": None}
+    mapping_dir = os.path.join(quarter_root, "mapping_files")
+    try:
+        entries = dbutils.fs.ls(mapping_dir)
+    except Exception as e:
+        print(f"  No mapping files at {mapping_dir}: {e}")
+        return seg_map
+    for entry in entries:
+        name = os.path.basename(entry.path).lower()
+        if name.startswith("api_mapping"):
+            seg_map["api"] = entry.path
+        elif name.startswith("dp_mapping"):
+            seg_map["dp"] = entry.path
+    return seg_map
 
 
 def discover_sap_file(dbutils, quarter_root):

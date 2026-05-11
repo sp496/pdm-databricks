@@ -35,7 +35,7 @@ from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
-env     = dbutils.widgets.get("DATAENV")
+env              = dbutils.widgets.get("DATAENV")
 year_override    = dbutils.widgets.get("YEAR").strip()
 quarter_override = dbutils.widgets.get("QUARTER").strip()
 print(f"Environment: {env}, year_override={year_override or '(none)'}, quarter_override={quarter_override or '(none)'}")
@@ -49,8 +49,8 @@ src_bkt_mount_point = config["src_bkt_mount_point"]
 tgt_bkt_mount_point = config["tgt_bkt_mount_point"]
 src_data_dir        = config["src_data_dir"].format(env=resolved_env)
 tgt_data_dir        = config["tgt_data_dir"]
-segments          = config["segments"]
-header_sheet_name = config["header_mapping_sheet_name"]
+segments            = config["segments"]
+header_sheet_name   = config["header_mapping_sheet_name"]
 
 src_root = f"{src_bkt_mount_point}/{src_data_dir}"
 tgt_root = f"{tgt_bkt_mount_point}/{tgt_data_dir}"
@@ -60,77 +60,70 @@ print(f"Target root: {tgt_root}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Resolve quarter to process
+# MAGIC #### Process each segment
 
 # COMMAND ----------
 
-if year_override and quarter_override:
-    year, quarter = year_override, quarter_override
-    print(f"Using override: year={year}, quarter={quarter}")
-else:
-    year, quarter = get_latest_completed_quarter(dbutils, src_root)
-    if not year or not quarter:
-        raise RuntimeError(f"No completed quarter found under {src_root}")
-    print(f"Using latest completed quarter: year={year}, quarter={quarter}")
+for segment in segments:
+    print(f"\n{'='*60}")
+    print(f"Segment: {segment}")
+    print(f"{'='*60}")
 
-quarter_root = f"{src_root}/{year}/{quarter}"
+    segment_src_root = f"{src_root}/{segment}"
 
-# COMMAND ----------
+    # ------------------------------------------------------------------
+    # Resolve quarter to process
+    # ------------------------------------------------------------------
+    if year_override and quarter_override:
+        year, quarter = year_override, quarter_override
+        print(f"Using override: year={year}, quarter={quarter}")
+    else:
+        year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
+        if not year or not quarter:
+            print(f"  No completed quarter found under {segment_src_root} — skipping segment")
+            continue
+        print(f"Using latest completed quarter: year={year}, quarter={quarter}")
 
-# MAGIC %md
-# MAGIC #### Reset target raw layer for this quarter (idempotent rerun)
+    quarter_root        = f"{segment_src_root}/{year}/{quarter}"
+    target_quarter_root = f"{tgt_root}/{segment}/{year}/{quarter}"
 
-# COMMAND ----------
+    # ------------------------------------------------------------------
+    # Reset target raw layer for this quarter (idempotent rerun)
+    # ------------------------------------------------------------------
+    print(f"Removing prior raw output at: {target_quarter_root}")
+    dbutils.fs.rm(f"dbfs:{target_quarter_root}", recurse=True)
 
-target_quarter_root = f"{tgt_root}/{year}/{quarter}"
-print(f"Removing prior raw output at: {target_quarter_root}")
-dbutils.fs.rm(f"dbfs:{target_quarter_root}", recurse=True)
+    # ------------------------------------------------------------------
+    # Load mapping files
+    # ------------------------------------------------------------------
+    mapping_paths = discover_mapping_files(dbutils, quarter_root)
+    print(f"Mapping paths: {mapping_paths}")
 
-# COMMAND ----------
+    resolved_mapping_paths = {k: dbfs_path(v) if v else v for k, v in mapping_paths.items()}
+    _, site_sheet_mapping = load_quarter_mappings(
+        {segment: resolved_mapping_paths}, header_sheet_name
+    )
+    print(f"3PLs in mapping: {sorted(site_sheet_mapping.keys())}")
 
-# MAGIC %md
-# MAGIC #### Load mapping files
+    # ------------------------------------------------------------------
+    # Process 3PL inventory files
+    # ------------------------------------------------------------------
+    files_3pl = discover_3pl_files(dbutils, quarter_root)
+    print(f"Discovered {len(files_3pl)} 3PL inventory file(s)")
 
-# COMMAND ----------
-
-mapping_paths = discover_mapping_files(dbutils, quarter_root, segments)
-print(f"Mapping paths: {mapping_paths}")
-
-resolved_mapping_paths = {
-    seg: {k: dbfs_path(v) if v else v for k, v in paths.items()}
-    for seg, paths in mapping_paths.items()
-}
-header_mapping_df, site_sheet_mapping = load_quarter_mappings(
-    resolved_mapping_paths, header_sheet_name
-)
-print(f"3PLs in mapping: {sorted(site_sheet_mapping.keys())}")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Process 3PL inventory files
-
-# COMMAND ----------
-
-files_3pl = discover_3pl_files(dbutils, quarter_root, segments)
-print(f"Discovered {len(files_3pl)} 3PL inventory files")
-
-for entry in files_3pl:
-    segment = entry["segment"]
-    site_id = entry["site_id"]
-    src_path = entry["path"]
-    out_dir = f"{target_quarter_root}/3pl_files/{segment}/{site_id}"
-    print(f"\nProcessing {segment}/{site_id}")
-    try:
-        sheets = process_3pl_file(dbfs_path(src_path), site_sheet_mapping.get(site_id))
-        dbutils.fs.mkdirs(f"dbfs:{out_dir}")
-        for sheet_slug, data in sheets.items():
-            out_path = dbfs_path(f"{out_dir}/{sheet_slug}.csv")
-            data.to_csv(out_path, index=False, encoding="utf-8")
-            print(f"    Wrote {out_path}")
-    except Exception as e:
-        print(f"  ERROR processing {segment}/{site_id}: {e}")
+    for site_id, src_path in files_3pl.items():
+        out_dir  = f"{target_quarter_root}/3pl_files/{site_id}"
+        print(f"\n  Processing {site_id}")
+        try:
+            sheets = process_3pl_file(dbfs_path(src_path), site_sheet_mapping.get(site_id))
+            dbutils.fs.mkdirs(f"dbfs:{out_dir}")
+            for sheet_slug, data in sheets.items():
+                out_path = dbfs_path(f"{out_dir}/{sheet_slug}.csv")
+                data.to_csv(out_path, index=False, encoding="utf-8")
+                print(f"    Wrote {out_path}")
+        except Exception as e:
+            print(f"  ERROR processing {site_id}: {e}")
 
 # COMMAND ----------
 
-print(f"3PL raw processing complete for {year} {quarter}")
+print(f"\n3PL raw processing complete for {year_override or year} {quarter_override or quarter}")

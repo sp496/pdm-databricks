@@ -1,5 +1,10 @@
 # Databricks notebook source
-# TODO: add YEAR and QUARTER override widgets (same pattern as process_3pl_inventory.py) to support historical loads
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## SAP Report — Raw Processing
+# MAGIC Reads the commercial SAP report for the target quarter, cleans it, and writes a CSV to the raw layer.
 
 # COMMAND ----------
 
@@ -20,8 +25,15 @@ from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
-env = dbutils.widgets.get("DATAENV")
-print(f"Environment: {env}")
+# MAGIC %md
+# MAGIC #### Parameters
+
+# COMMAND ----------
+
+env              = dbutils.widgets.get("DATAENV")
+year_override    = dbutils.widgets.get("YEAR").strip()
+quarter_override = dbutils.widgets.get("QUARTER").strip()
+print(f"Environment: {env}, year_override={year_override or '(none)'}, quarter_override={quarter_override or '(none)'}")
 
 # COMMAND ----------
 
@@ -38,20 +50,28 @@ tgt_root = f"{tgt_bkt_mount_point}/{tgt_data_dir}"
 print(f"Source root: {src_root}")
 print(f"Target root: {tgt_root}")
 
+# SAP report is commercial-only
+segment             = "commercial"
+segment_src_root    = f"{src_root}/{segment}"
+
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Resolve latest completed quarter
+# MAGIC #### Resolve quarter to process
 
 # COMMAND ----------
 
-year, quarter = get_latest_completed_quarter(dbutils, src_root)
-if not year or not quarter:
-    raise RuntimeError(f"No completed quarter found under {src_root}")
+if year_override and quarter_override:
+    year, quarter = year_override, quarter_override
+    print(f"Using override: year={year}, quarter={quarter}")
+else:
+    year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
+    if not year or not quarter:
+        raise RuntimeError(f"No completed quarter found under {segment_src_root}")
+    print(f"Using latest completed quarter: year={year}, quarter={quarter}")
 
-print(f"Processing year={year}, quarter={quarter}")
-quarter_root    = f"{src_root}/{year}/{quarter}"
-sap_out_dir     = f"{tgt_root}/{year}/{quarter}/sap_report_files"
+quarter_root = f"{segment_src_root}/{year}/{quarter}"
+sap_out_dir  = f"{tgt_root}/{segment}/{year}/{quarter}/sap_report_files"
 
 # COMMAND ----------
 
