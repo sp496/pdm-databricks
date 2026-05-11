@@ -30,8 +30,10 @@ def _dbfs_path(path):
 
 # COMMAND ----------
 
-env = dbutils.widgets.get("DATAENV")
-print(f"Environment: {env}")
+env     = dbutils.widgets.get("DATAENV")
+year_override    = dbutils.widgets.get("YEAR").strip()
+quarter_override = dbutils.widgets.get("QUARTER").strip()
+print(f"Environment: {env}, year_override={year_override or '(none)'}, quarter_override={quarter_override or '(none)'}")
 
 # COMMAND ----------
 
@@ -53,15 +55,19 @@ print(f"Target root: {tgt_root}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Resolve latest completed quarter
+# MAGIC #### Resolve quarter to process
 
 # COMMAND ----------
 
-year, quarter = get_latest_completed_quarter(dbutils, src_root)
-if not year or not quarter:
-    raise RuntimeError(f"No completed quarter found under {src_root}")
+if year_override and quarter_override:
+    year, quarter = year_override, quarter_override
+    print(f"Using override: year={year}, quarter={quarter}")
+else:
+    year, quarter = get_latest_completed_quarter(dbutils, src_root)
+    if not year or not quarter:
+        raise RuntimeError(f"No completed quarter found under {src_root}")
+    print(f"Using latest completed quarter: year={year}, quarter={quarter}")
 
-print(f"Processing year={year}, quarter={quarter}")
 quarter_root = f"{src_root}/{year}/{quarter}"
 
 # COMMAND ----------
