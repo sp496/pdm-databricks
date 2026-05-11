@@ -3,7 +3,7 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # 3PL Inventory — Raw Processing
+# MAGIC ## 3PL Inventory — Raw Processing
 # MAGIC Reads 3PL inventory Excel files for the target quarter, cleans them, and writes one CSV per sheet to the raw layer.
 
 # COMMAND ----------
@@ -31,7 +31,7 @@ from common.dbfs_utils import dbfs_path
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Parameters
+# MAGIC #### Parameters
 
 # COMMAND ----------
 
