@@ -2,6 +2,12 @@
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC # 3PL Inventory — Raw Processing
+# MAGIC Reads 3PL inventory Excel files for the target quarter, cleans them, and writes one CSV per sheet to the raw layer.
+
+# COMMAND ----------
+
 import os
 import sys
 
@@ -27,6 +33,11 @@ def _dbfs_path(path):
     if path.startswith("dbfs:"):
         return path.replace("dbfs:", "/dbfs", 1)
     return path if path.startswith("/dbfs") else f"/dbfs{path}"
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Parameters
 
 # COMMAND ----------
 
