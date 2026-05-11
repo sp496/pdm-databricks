@@ -26,13 +26,7 @@ from lib.raw.discovery import (
 from lib.raw.mapping_loader import load_quarter_mappings
 from lib.raw.excel_processor import process_3pl_file
 from common.config_loader import load_config
-
-
-def _dbfs_path(path):
-    """Convert a dbfs: or mount path to its FUSE-accessible /dbfs equivalent for pandas I/O."""
-    if path.startswith("dbfs:"):
-        return path.replace("dbfs:", "/dbfs", 1)
-    return path if path.startswith("/dbfs") else f"/dbfs{path}"
+from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
@@ -103,7 +97,7 @@ mapping_paths = discover_mapping_files(dbutils, quarter_root, segments)
 print(f"Mapping paths: {mapping_paths}")
 
 resolved_mapping_paths = {
-    seg: {k: _dbfs_path(v.replace("dbfs:", "")) if v else v for k, v in paths.items()}
+    seg: {k: dbfs_path(v) if v else v for k, v in paths.items()}
     for seg, paths in mapping_paths.items()
 }
 header_mapping_df, site_sheet_mapping = load_quarter_mappings(
@@ -128,10 +122,10 @@ for entry in files_3pl:
     out_dir = f"{target_quarter_root}/3pl_files/{segment}/{site_id}"
     print(f"\nProcessing {segment}/{site_id}")
     try:
-        sheets = process_3pl_file(_dbfs_path(src_path), site_sheet_mapping.get(site_id))
+        sheets = process_3pl_file(dbfs_path(src_path), site_sheet_mapping.get(site_id))
         dbutils.fs.mkdirs(f"dbfs:{out_dir}")
         for sheet_slug, data in sheets.items():
-            out_path = _dbfs_path(f"{out_dir}/{sheet_slug}.csv")
+            out_path = dbfs_path(f"{out_dir}/{sheet_slug}.csv")
             data.to_csv(out_path, index=False, encoding="utf-8")
             print(f"    Wrote {out_path}")
     except Exception as e:
