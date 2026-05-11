@@ -152,12 +152,12 @@ def main():
             logger.warning(f"  MISSING: {p}")
         print()
 
-    # Run — no Spark/Starburst available locally so everything uses fallback files
+    # Run — data_source='file' skips connection attempts and loads directly from files
     cache = load_mapping_files(
         file_paths=FILE_PATHS,
         year=YEAR,
         quarter=QUARTER,
-        use_starburst=False,
+        data_source="file",
     )
 
     # Print summary of every dataframe in the cache
