@@ -120,6 +120,35 @@ def discover_mapping_files(dbutils, quarter_root):
     return seg_map
 
 
+def discover_all_raw_csvs(dbutils, quarter_root):
+    """Walk 3pl_files/{site_id}/ and return all CSV files per site_id.
+
+    Unlike discover_3pl_files (which returns only the latest file), this returns
+    every CSV in each site folder — used by the curated layer which may need to
+    process multiple sheets written by the raw layer.
+
+    Returns a dict: {site_id: [path, ...]}.
+    """
+    results = {}
+    base = os.path.join(quarter_root, "3pl_files")
+    try:
+        site_dirs = [d for d in dbutils.fs.ls(base) if d.path.endswith("/")]
+    except Exception as e:
+        print(f"  No 3PL files found at {base}: {e}")
+        return results
+    for site in site_dirs:
+        site_id = PurePath(site.path).name
+        files = [
+            e.path for e in dbutils.fs.ls(site.path)
+            if not e.path.endswith("/") and not os.path.basename(e.path).startswith("~$")
+        ]
+        if files:
+            results[site_id] = files
+        else:
+            print(f"  No files found for {site_id}")
+    return results
+
+
 def discover_sap_file(dbutils, quarter_root):
     """Return path to the latest SAP report file for the quarter, or None."""
     sap_dir = os.path.join(quarter_root, "sap_report_files")

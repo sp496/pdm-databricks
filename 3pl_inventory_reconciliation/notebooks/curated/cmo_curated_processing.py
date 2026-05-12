@@ -1,434 +1,229 @@
 # Databricks notebook source
-# MAGIC %md
-# MAGIC #### Imports
 
 # COMMAND ----------
 
-import json
+# MAGIC %md
+# MAGIC ## 3PL Inventory — Curated Processing
+# MAGIC Reads raw CSV files for the target quarter, applies curation transformations
+# MAGIC (header mapping, material/lot/UOM mapping, cost enrichment, validation flags),
+# MAGIC and writes one curated CSV per sheet per 3PL site to the curated layer.
+# MAGIC
+# MAGIC **DATA_SOURCE options:**
+# MAGIC - `spark` — prod: queries run via Spark SQL against Databricks tables
+# MAGIC - `starburst` — dev: queries run via Starburst/Trino JDBC
+# MAGIC - `file` — local fallback only, skips all live queries
+
+# COMMAND ----------
+
 import os
-import re
-from datetime import datetime
+import sys
+
+current_dir  = os.getcwd()
+project_root = os.path.dirname(os.path.dirname(current_dir))  # 3pl_inventory_reconciliation
+repo_root    = os.path.dirname(project_root)
+sys.path.extend([project_root, repo_root])
+
+# COMMAND ----------
+
 import pandas as pd
 import numpy as np
-from pathlib import PurePath
-from typing import Dict, Any, Optional
-import data_cache_starburst as dc
-import curation_utils as cutils
 
-# COMMAND ----------
-
-# MAGIC %pip install openpyxl
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Identify latest year and quarter
-
-# COMMAND ----------
-
-def get_latest_year_quarter(root_directory):
-    latest_year_dir = None
-    latest_quarter_dir = None
-    # Find the latest year directory
-    year_dirs = sorted(
-        [int(PurePath(d.path).name) for d in dbutils.fs.ls(root_directory)
-         if PurePath(d.path).name.isdigit() and len(PurePath(d.path).name) == 4],
-        reverse=True
-    )
-    if not year_dirs:
-        return latest_year_dir, latest_quarter_dir
-    latest_year_dir = str(year_dirs[0])
-    year_path = os.path.join(root_directory, latest_year_dir)
-    # Find the latest quarter directory within the latest year
-    quarter_dirs = sorted(
-        [
-            PurePath(d.path).name
-            for d in dbutils.fs.ls(year_path)
-            if re.fullmatch(r"Q[1-4]", PurePath(d.path).name)
-        ],
-        key=lambda q: int(q[1:]),
-        reverse=True
-    )
-    if not quarter_dirs:
-        return latest_year_dir, latest_quarter_dir
-    latest_quarter_dir = quarter_dirs[0]
-    # latest_quarter_dir = 'Q4'
-    return latest_year_dir, latest_quarter_dir
+from lib.curated.data_cache import MappingFilePaths, load_mapping_files
+from lib.curated.curation_utils import curated_processing
+from lib.raw.discovery import (
+    get_latest_completed_quarter,
+    discover_mapping_files,
+    discover_sap_file,
+    discover_all_raw_csvs,
+)
+from common.config_loader import load_config
+from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Resolve config
+# MAGIC #### Parameters
 
 # COMMAND ----------
 
-def resolve_placeholders(data, variables):
-    if isinstance(data, dict):
-        return {k: resolve_placeholders(v, variables) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [resolve_placeholders(item, variables) for item in data]
-    elif isinstance(data, str):
-        return data.format(**variables)
-    else:
-        return data
+env              = dbutils.widgets.get("DATAENV")
+year_override    = dbutils.widgets.get("YEAR").strip()
+quarter_override = dbutils.widgets.get("QUARTER").strip()
+segment          = dbutils.widgets.get("SEGMENT")
+data_source      = dbutils.widgets.get("DATA_SOURCE").strip().lower()
 
-# COMMAND ----------
-
-with open("config.json") as f:
-    raw_config = json.load(f)
-
-mount_point = "/mnt/pdm-gsc-bi"
-raw_data_path = os.path.join(mount_point, raw_config["s3_paths"]["raw_data_path"])
-latest_year, latest_quarter = get_latest_year_quarter(raw_data_path) 
-
-variables = {
-    "year": latest_year,
-    "quarter": latest_quarter
-}
- 
-config = resolve_placeholders(raw_config, variables)
-
+print(f"Environment : {env}")
+print(f"Segment     : {segment}")
+print(f"Year        : {year_override or '(auto-detect)'}")
+print(f"Quarter     : {quarter_override or '(auto-detect)'}")
+print(f"Data source : {data_source}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Mounting s3 bucket
+# MAGIC #### Config and path resolution
 
 # COMMAND ----------
 
+config      = load_config(os.path.join(project_root, "config/raw.json"))
+curated_cfg = load_config(os.path.join(project_root, "config/curated.json"))
 
-mount_point = "/mnt/pdm-gsc-bi"
+resolved_env = "prod" if env == "prd" else env
 
-source_bucket = config["s3_paths"]["bucket"]  
-raw_data_path = os.path.join(mount_point, config["s3_paths"]["raw_data_path"])
+src_root     = f"{config['src_bkt_mount_point']}/{config['src_data_dir'].format(env=resolved_env)}"
+raw_root     = f"{config['tgt_bkt_mount_point']}/{config['tgt_data_dir']}"
+curated_root = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['curated_data_dir']}"
+ref_base     = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
 
-curated_data_path = os.path.join(mount_point, config["s3_paths"]["curated_data_path"])
-
-plant_name_mapping_file_path = os.path.join(mount_point, config["s3_paths"]["plant_name_mapping_file_path"])
-
-api_mapping_file_path = os.path.join(mount_point, config["s3_paths"]["api_mapping_file_path"])
-dp_mapping_file_path = os.path.join(mount_point, config["s3_paths"]["dp_mapping_file_path"])
-
-header_mapping_sheet_name = config["s3_paths"]["header_mapping_sheet_name"] 
-item_mapping_sheet_name = config["s3_paths"]["item_mapping_sheet_name"]
-uom_mapping_sheet_name = config["s3_paths"]["uom_mapping_sheet_name"]
-uom_master_file_path = os.path.join(mount_point, config["s3_paths"]["uom_master_file_path"])
-material_master_file_path = os.path.join(mount_point, config["s3_paths"]["material_master_file_path"])
-lot_no_mapping_file_path = os.path.join(mount_point, config["s3_paths"]["lot_no_mapping_file_path"])
-lot_no_master_file_path = os.path.join(mount_point, config["s3_paths"]["lot_no_master_file_path"])
-gil_receipts_file_path = os.path.join(mount_point, config["s3_paths"]["gilead_receipts_file_path"])
-sap_report_file_path = os.path.join(mount_point, config["s3_paths"]["sap_report_path"])
-unit_cost_file_path = os.path.join(mount_point, config["s3_paths"]["unit_cost_file_path"])
-material_type_file_path = os.path.join(mount_point, config["s3_paths"]["material_type_file_path"])
-material_description_file_path = os.path.join(mount_point, config["s3_paths"]["material_description_file_path"])
-starburst_config = config["starburst_config"]
+print(f"Source root  : {src_root}")
+print(f"Raw root     : {raw_root}")
+print(f"Curated root : {curated_root}")
 
 # COMMAND ----------
 
-if not any(mount.mountPoint == mount_point for mount in dbutils.fs.mounts()):
-  dbutils.fs.mount(
-        source = source_bucket,
-        mount_point = mount_point,
-      )
+# Resolve year/quarter from the source landing zone (same as raw notebook)
+segment_src_root = f"{src_root}/{segment}"
 
-# COMMAND ----------
+if year_override and quarter_override:
+    year, quarter = year_override, quarter_override
+    print(f"Using override: year={year}, quarter={quarter}")
+else:
+    year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
+    if not year or not quarter:
+        raise RuntimeError(f"No completed quarter found under {segment_src_root}")
+    print(f"Auto-detected latest completed quarter: year={year}, quarter={quarter}")
 
-# MAGIC %md
-# MAGIC #### Function for identifying files to process
+src_quarter_root     = f"{segment_src_root}/{year}/{quarter}"
+raw_quarter_root     = f"{raw_root}/{segment}/{year}/{quarter}"
+curated_quarter_root = f"{curated_root}/{segment}/{year}/{quarter}"
 
-# COMMAND ----------
-
-def find_latest_files_s3(root_directory):
-    latest_files = {}
-    latest_year_dir = None
-    latest_quarter_dir = None
- 
-    print(f"\n[INFO] ===== STARTING SEARCH IN {root_directory} =====")
-
-    year_dirs = sorted(
-        [int(PurePath(d.path).name) for d in dbutils.fs.ls(root_directory)
-         if PurePath(d.path).name.isdigit() and len(PurePath(d.path).name) == 4],
-        reverse=True
-    )
-
-    if not year_dirs:
-        print(f"[INFO] No year directories found in root: {root_directory}")
-        return latest_files
-    latest_year_dir = str(year_dirs[0])
-    year_path = os.path.join(root_directory, latest_year_dir)
-    print(f"[INFO] Found latest year directory: {latest_year_dir}")
-    print(f"[INFO] \tPath: {year_path}")
-
-    # List all directories within the latest year and filter for quarter directories (Q1-Q4)
-    quarter_dirs = sorted(
-        [
-            PurePath(d.path).name
-            for d in dbutils.fs.ls(year_path)
-            if re.fullmatch(r"Q[1-4]", PurePath(d.path).name)
-        ],
-        key=lambda q: int(q[1:]),
-        reverse=True
-    )
-
-    if not quarter_dirs:
-        print(f"[INFO] No quarter directories (Q1-Q4) found in year: {year_path}")
-        return latest_files
-
-    latest_quarter_dir = quarter_dirs[0]
-    # latest_quarter_dir = 'Q4'
-    quarter_path = os.path.join(year_path, latest_quarter_dir, '3pl_files')
-    print(f"\n[INFO] Found latest quarter: {latest_quarter_dir}")
-    print(f"[INFO] \tFull path: {quarter_path}")
-
-    # List subfolders within the '3pl_files' directory
-    subfolders = [
-        PurePath(d.path).name
-        for d in dbutils.fs.ls(quarter_path)
-        if d.name.endswith('/')
-    ]
-    print(f"\n[INFO] Found {len(subfolders)} subfolders in {latest_quarter_dir}/3pl_files:")
-    for sf in subfolders:
-        print(f"[INFO] \t- {sf}")
-        
-    for subfolder in subfolders:
-        subfolder_path = os.path.join(quarter_path, subfolder)
-        print(f"\n[INFO] Scanning subfolder: {subfolder}")
-        print(f"[INFO] \tFull path: {subfolder_path}")
- 
-        all_files_info = dbutils.fs.ls(subfolder_path)
-        latest_file_info = None
-        latest_time = None
-        for file_info in all_files_info:
-            if not file_info.path.endswith('/'):
-                modified_time_seconds = file_info.modificationTime / 1000
-                modified_datetime = datetime.fromtimestamp(modified_time_seconds)
-                if latest_time is None or modified_datetime > latest_time:
-                    latest_time = modified_datetime
-                    latest_file_info = file_info
- 
-        if latest_file_info:
-            mounted_path = latest_file_info.path.replace("dbfs:", "/dbfs")
-            latest_files[subfolder] = mounted_path
-            print(f"[SUCCESS] Found latest file in {subfolder}:")
-            print(f"[SUCCESS] \tFile: {os.path.basename(mounted_path)}")
-            print(f"[SUCCESS] \tModified: {latest_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"[SUCCESS] \tFull path: {mounted_path}")
-        else:
-            print(f"[WARNING] No files found in subfolder: {subfolder}")
-        print("")  # Empty line after processing each subfolder
- 
- 
-    print(f"\n[SUMMARY] ===== SEARCH COMPLETE =====")
-    print(f"[SUMMARY] Found {len(latest_files)} latest files across {len(subfolders) if 'subfolders' in locals() else 0} subfolders")
-    if latest_files:
-        print("[SUMMARY] Files found by subfolder:")
-        for subfolder, path in latest_files.items():
-            print(f"  - {subfolder}: {os.path.basename(path)}")
-    print("=" * 50)
-    return latest_files
+print(f"Source quarter : {src_quarter_root}")
+print(f"Raw quarter    : {raw_quarter_root}")
+print(f"Curated output : {curated_quarter_root}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Main function for curating single file
+# MAGIC #### Build mapping file paths
 
 # COMMAND ----------
 
-def curated_processing(
-        raw_df: pd.DataFrame,
-        raw_file_path: str,
-        mapping_cache: dc.MappingDataCache
-) -> pd.DataFrame:
+mapping_paths = discover_mapping_files(dbutils, src_quarter_root)
+print(f"Mapping files: {mapping_paths}")
 
-    pd.set_option('display.max_rows', None)
-    # Load input data with proper error handling
-    df = raw_df.copy()
-    df = df.replace([None, 'None', 'nan', 'NaN', ''], np.nan)
+if not mapping_paths.get("api") or not mapping_paths.get("dp"):
+    raise FileNotFoundError(f"Could not find api/dp mapping files under {src_quarter_root}/mapping_files")
 
-    pl_combined_key = cutils.get_3pl_combined_key(raw_file_path)
-    print(f"\nProcessing data for 3PL: {pl_combined_key}")
-    print(f"\tInput data loaded: {df.shape} rows and columns")
+sap_report_path = discover_sap_file(dbutils, src_quarter_root)
+if not sap_report_path:
+    raise FileNotFoundError(f"No SAP report found under {src_quarter_root}/sap_report_files")
+print(f"SAP report   : {sap_report_path}")
 
-    # Add metadata columns
-    print("\tAdding metadata")
-    df = cutils.add_3pl_details(df, raw_file_path, mapping_cache.plant_name_mapping_df, mapping_cache.3pl_type_mapping_df)
-    print('\t---------------', df.shape)
-    
-    
-
-    # Load and apply header mapping
-    print("\tApplying header mapping")
-    print(df.columns)
-    df = cutils.map_filter_3pl_df(df, pl_combined_key, mapping_cache.header_mapping_df)
-    print('\t---------------', df.shape)
-    
-    
-
-    print("\tAdding info columns")
-    df = cutils.add_metadata(df, raw_file_path)
-    print('\t---------------', df.shape)
-    
-    
-    #Aggregate quantities
-    print("\tAggregating Quantities")
-    df = cutils.aggregate_quantities(df)
-    print('\t---------------', df.shape)
-    
-
-    # Map material codes
-    print("\tMapping material codes")
-    df = cutils.map_material_code(df, mapping_cache.item_mapping_df, mapping_cache.material_master_df)
-    print('\t---------------', df.shape)
-
-    # Map lot numbers
-    print("\tMapping lot numbers")
-    df = cutils.map_lot_no_wildcard(df, mapping_cache.lot_no_master_df, mapping_cache.lot_no_mapping_df, mapping_cache.sap_report_df)
-    print('\t---------------', df.shape)
-    
-
-    # Process UOM mapping and conversion
-    print("\tProcessing UOM mapping and conversion")
-    df = cutils.map_uom_and_convert(df, mapping_cache.uom_mapping_df, mapping_cache.uom_master_df)
-    print('\t---------------', df.shape)
-    
-
-    # Get Unit cost
-    print("\tGet Unit Costs")
-    df = cutils.get_unit_cost(df, mapping_cache.unit_cost_df)
-    print('\t---------------', df.shape)
-    
-
-    # Get Material type
-    print("\tGet Material Type")
-    df = cutils.get_material_type(df, mapping_cache.material_type_df)
-    print('\t---------------', df.shape)
-    
-
-    desired_order = [
-        '3PL',
-        '3PL_Name',
-        'Gilead_Material_Code',
-        'Gilead_Batch_Number',
-        'Gilead_UOM',
-        'Conversion_Factor',
-        '3PL_Material_Code',
-        '3PL_Batch_Number',
-        '3PL_Quantity',
-        '3PL_Converted_Quantity',
-        '3PL_UOM',
-        '3PL_Material_Type',
-        'Cost',
-        '3PL_Type',
-        'File_Name',
-        'Year',
-        'Quarter',
-        'Date_Processed',
-        'Has_Error',
-        'Validation_Remark'
-    ]
-
-    df = df[desired_order]
-    df = df.replace('nan', np.nan)
-
-    print(f"Processing complete. Output shape: {df.shape}")
-    return df
-
-
-def save_processed_data(df: pd.DataFrame, output_directory: str, output_filename: str) -> None:
-    output_directory_dbu = output_directory.replace("/dbfs", "dbfs:")
-    print(f"Ensuring output directory exists: {output_directory_dbu}")
-    dbutils.fs.mkdirs(output_directory_dbu)
-    full_output_path = os.path.join(output_directory, output_filename)
-    df.to_csv(full_output_path, index=False)
-    print(f"File saved successfully to {full_output_path}")
-
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Loading mapping data cache
-
-# COMMAND ----------
-
-mapping_cache = dc.load_mapping_files(
-    api_mapping_file_path = f"/dbfs{api_mapping_file_path}",
-    dp_mapping_file_path = f"/dbfs{dp_mapping_file_path}",
-    header_mapping_sheet_name = header_mapping_sheet_name,
-    plant_name_mapping_file_path=f"/dbfs{plant_name_mapping_file_path}",
-    item_mapping_sheet_name=item_mapping_sheet_name,
-    uom_mapping_sheet_name=uom_mapping_sheet_name,
-    uom_master_file_path=f"/dbfs{uom_master_file_path}",
-    material_master_file_path=f"/dbfs{material_master_file_path}",
-    lot_no_mapping_file_path=f"/dbfs{lot_no_mapping_file_path}",
-    material_description_file_path =f"/dbfs{material_description_file_path}",
-    unit_cost_file_path=f"/dbfs{unit_cost_file_path}",
-    material_type_file_path=f"/dbfs{material_type_file_path}",
-    gil_receipts_file_path=f"/dbfs{gil_receipts_file_path}",
-    sap_report_file_path=f"/dbfs{sap_report_file_path}",
-    lot_no_master_file_path=f"/dbfs{lot_no_master_file_path}",
-    year=latest_year,
-    quarter=latest_quarter,
-    starburst_config=starburst_config,
-    create_mapping_tables_from_files=False,
+file_paths = MappingFilePaths(
+    api_mapping_file_path          = dbfs_path(mapping_paths["api"]),
+    dp_mapping_file_path           = dbfs_path(mapping_paths["dp"]),
+    header_mapping_sheet_name      = config["header_mapping_sheet_name"],
+    item_mapping_sheet_name        = "Item Mapping",
+    uom_mapping_sheet_name         = "UOM Mapping",
+    sap_report_file_path           = dbfs_path(sap_report_path),
+    plant_name_mapping_file_path   = dbfs_path(f"{ref_base}/plant_name_mapping.csv"),
+    material_master_file_path      = dbfs_path(f"{ref_base}/material_master.csv"),
+    lot_no_master_file_path        = dbfs_path(f"{ref_base}/lot_no_master.csv"),
+    lot_no_mapping_file_path       = dbfs_path(f"{ref_base}/lot_no_mapping.csv"),
+    material_description_file_path = dbfs_path(f"{ref_base}/material_description.csv"),
+    uom_master_file_path           = dbfs_path(f"{ref_base}/uom_master.csv"),
+    unit_cost_file_path            = dbfs_path(f"{ref_base}/unit_cost.csv"),
+    material_type_file_path        = dbfs_path(f"{ref_base}/material_type.csv"),
+    gil_receipts_file_path         = dbfs_path(f"{ref_base}/gilead_receipts.csv"),
 )
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Identify files to be processed
+# MAGIC #### Load mapping cache
 
 # COMMAND ----------
 
-latest_files_from_s3 = find_latest_files_s3(raw_data_path)
+starburst_config = None
+if data_source == "starburst":
+    starburst_config = {
+        "base_url"        : "jdbc:trino://query.gilead.com:443",
+        "username"        : dbutils.secrets.get(scope="pdm-gsc", key="starburst-username"),
+        "password"        : dbutils.secrets.get(scope="pdm-gsc", key="starburst-password"),
+        "default_catalog" : "pdm",
+        "default_schema"  : "default",
+    }
+
+mapping_cache = load_mapping_files(
+    file_paths       = file_paths,
+    year             = year,
+    quarter          = quarter,
+    data_source      = data_source,
+    starburst_config = starburst_config,
+)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Clear previous data for the identified Quarter
+# MAGIC #### Reset curated output for this quarter (idempotent rerun)
 
 # COMMAND ----------
 
-dbutils.fs.rm(f'dbfs:{os.path.join(curated_data_path, latest_year, latest_quarter)}', recurse=True)
+print(f"Removing prior curated output at: {curated_quarter_root}")
+dbutils.fs.rm(f"dbfs:{curated_quarter_root}", recurse=True)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Process identified files
+# MAGIC #### Discover raw CSV files to process
 
 # COMMAND ----------
 
-if latest_files_from_s3:
-    raw_data_path = config["s3_paths"]["raw_data_path"]
-    curated_data_path = config["s3_paths"]["curated_data_path"]
-    
-    for subfolder, raw_file_path in latest_files_from_s3.items():
-        print(f"\n\n\nSubfolder '{subfolder}': {raw_file_path}")
+raw_files_by_site = discover_all_raw_csvs(dbutils, raw_quarter_root)
+total_files = sum(len(v) for v in raw_files_by_site.values())
+print(f"Discovered {len(raw_files_by_site)} site(s), {total_files} CSV file(s) to curate")
+for site_id, paths in raw_files_by_site.items():
+    for p in paths:
+        print(f"  {site_id}: {os.path.basename(p)}")
 
-        curated_output_file_path = raw_file_path.replace(raw_data_path, curated_data_path)
-        print(f"Calculated curated_output_path: {curated_output_file_path}")
+# COMMAND ----------
 
-        print(f"Raw file path for processing: {raw_file_path}")
+# MAGIC %md
+# MAGIC #### Process each site
 
-        curated_output_directory = os.path.dirname(curated_output_file_path)
-        print(f"Curated output directory: {curated_output_directory}")
+# COMMAND ----------
 
-        curated_file_name = os.path.basename(curated_output_file_path)
-        print(f"Curated file_name: {curated_file_name}\n")
+errors = []
+
+for site_id, raw_paths in raw_files_by_site.items():
+    print(f"\n{'='*60}")
+    print(f"Site: {site_id}  ({len(raw_paths)} file(s))")
+
+    for raw_path in raw_paths:
+        file_stem = os.path.splitext(os.path.basename(raw_path))[0]
+        out_dir   = f"{curated_quarter_root}/3pl_files/{site_id}"
+        out_path  = f"{out_dir}/{file_stem}_curated.csv"
+
+        print(f"\n  Source : {os.path.basename(raw_path)}")
+        print(f"  Output : {out_path}")
         try:
-            print(f"Loading input file from {raw_file_path}")
-            # 1. Display all columns
-            pd.set_option('display.max_columns', None)
-
-            # 2. Display all rows
-            pd.set_option('display.max_rows', None)
-            raw_df = pd.read_csv(raw_file_path, dtype=str)
-            # print("------------------Raw DF--------------------------------")
-            # print(raw_df)
-            df = curated_processing(raw_df, raw_file_path, mapping_cache)
-            save_processed_data(df, curated_output_directory, curated_file_name)
+            raw_df     = pd.read_csv(dbfs_path(raw_path), dtype=str)
+            curated_df = curated_processing(raw_df, raw_path, mapping_cache)
+            dbutils.fs.mkdirs(f"dbfs:{out_dir}")
+            curated_df.to_csv(dbfs_path(out_path), index=False)
+            print(f"  Wrote {curated_df.shape[0]} rows to {out_path}")
         except Exception as e:
-            print(e)
-            # if subfolder not in ():
-            #     raise e
-else:
-    print("No suitable files found in the specified folder structure.")
+            print(f"  ERROR: {e}")
+            errors.append((site_id, os.path.basename(raw_path), str(e)))
+
+# COMMAND ----------
+
+print(f"\n{'='*60}")
+print(f"Curated processing complete — {segment} {year} {quarter}")
+print(f"  Sites processed : {len(raw_files_by_site)}")
+print(f"  Files processed : {total_files}")
+print(f"  Errors          : {len(errors)}")
+if errors:
+    print("  Failed files:")
+    for site_id, fname, err in errors:
+        print(f"    [{site_id}] {fname}: {err}")
