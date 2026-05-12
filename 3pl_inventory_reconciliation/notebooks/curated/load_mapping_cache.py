@@ -130,7 +130,7 @@ file_cache = load_file_mappings(file_paths)
 
 print("\n--- File mapping summary ---")
 print(f"  header_mapping  : {file_cache.header_mapping_df.shape if file_cache.header_mapping_df is not None else 'None'}")
-print(f"  cmo_type_mapping: {file_cache.cmo_type_mapping_df.shape if file_cache.cmo_type_mapping_df is not None else 'None'}")
+print(f"  pl_type_mapping : {file_cache.pl_type_mapping_df.shape if file_cache.pl_type_mapping_df is not None else 'None'}")
 print(f"  item_mapping    : {file_cache.item_mapping_df.shape if file_cache.item_mapping_df is not None else 'None'}")
 print(f"  uom_mapping     : {file_cache.uom_mapping_df.shape if file_cache.uom_mapping_df is not None else 'None'}")
 print(f"  sap_report      : {file_cache.sap_report_df.shape if file_cache.sap_report_df is not None else 'None'}")
@@ -169,7 +169,7 @@ cache = load_mapping_files(
 
 fields = {
     "header_mapping"       : cache.header_mapping_df,
-    "cmo_type_mapping"     : cache.cmo_type_mapping_df,
+    "pl_type_mapping"      : cache.pl_type_mapping_df,
     "item_mapping"         : cache.item_mapping_df,
     "uom_mapping"          : cache.uom_mapping_df,
     "sap_report"           : cache.sap_report_df,

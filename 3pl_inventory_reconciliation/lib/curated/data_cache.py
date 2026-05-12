@@ -41,7 +41,7 @@ class MappingDataCache:
 
     def __init__(self):
         self.header_mapping_df = None
-        self.cmo_type_mapping_df = None
+        self.pl_type_mapping_df = None
         self.plant_name_mapping_df = None
         self.item_mapping_df = None
         self.material_master_df = None
@@ -94,7 +94,7 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
             file_paths.header_mapping_sheet_name
         )
         print(f"\tSuccessfully loaded and combined Header Mappings ({len(cache.header_mapping_df)} rows)")
-        cache.cmo_type_mapping_df = cache.header_mapping_df[['3PL', '3PL_Type']].drop_duplicates(
+        cache.pl_type_mapping_df = cache.header_mapping_df[['3PL', '3PL_Type']].drop_duplicates(
             ignore_index=True).astype(str)
     except FileNotFoundError as e:
         print(f"\tFailed to load Header Mappings (File Not Found): {e}")
