@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 import pandas as pd
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
@@ -47,6 +48,7 @@ class MappingDataCache:
         self.material_master_df = None
         self.lot_no_master_df = None
         self.lot_no_mapping_df = None
+        self.lot_no_mapping_lookup = None  # {matnr: [(atwrt, charg), ...]} — built once from lot_no_mapping_df
         self.sap_report_df = None
         self.uom_mapping_df = None
         self.uom_master_df = None
@@ -72,7 +74,36 @@ def _load_and_combine_sheet(dp_path: str, api_path: str, sheet_name: str) -> pd.
     api_df = _load_excel_sheet(api_path, sheet_name).assign(**{'3PL_Type': 'API'})
     combined = pd.concat([dp_df, api_df], ignore_index=True)
     combined.columns = combined.columns.str.replace(_COL_CLEAN_PATTERN, '_', regex=True)
+    combined = combined.replace("\xa0", "", regex=False)
     return combined
+
+
+def _coerce_string_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert all columns to string, preserving nulls as NaN.
+
+    This ensures nulls remain NaN (not the string "nan") regardless of
+    whether the data was loaded from a file or a live Spark/Starburst query.
+    Numeric columns are converted to string here but cast back to float
+    where needed in curation_utils.
+    """
+    for col in df.columns:
+        df[col] = df[col].where(df[col].isna(), df[col].astype(str))
+    return df
+
+
+def _build_lot_no_mapping_lookup(lot_no_mapping_df: pd.DataFrame) -> dict:
+    """Pre-process lot_no_mapping_df into a dict for fast per-material lookup.
+
+    Returns {matnr: [(atwrt, charg), ...]} with leading zeros stripped from atwrt
+    and duplicates removed — ready for the wildcard substring match in map_lot_no_wildcard.
+    """
+    lnm = lot_no_mapping_df.dropna(subset=["atwrt", "charg", "matnr"]).copy().astype(str)
+    lnm["atwrt"] = lnm["atwrt"].str.lstrip("0")
+    lnm = lnm.drop_duplicates(["charg", "matnr", "atwrt"])
+    lookup = defaultdict(list)
+    for row in lnm.itertuples(index=False):
+        lookup[row.matnr].append((row.atwrt, row.charg))
+    return lookup
 
 
 def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
@@ -111,6 +142,7 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
             file_paths.item_mapping_sheet_name
         )
         print(f"\tSuccessfully loaded and combined Item Mappings ({len(cache.item_mapping_df)} rows)")
+        cache.item_mapping_df = cache.item_mapping_df.dropna(subset=["3PL_Part"])
     except FileNotFoundError as e:
         print(f"\tFailed to load Item Mappings (File Not Found): {e}")
         raise
@@ -126,6 +158,8 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
             file_paths.uom_mapping_sheet_name
         )
         print(f"\tSuccessfully loaded and combined UOM Mappings ({len(cache.uom_mapping_df)} rows)")
+        cache.uom_mapping_df = cache.uom_mapping_df.dropna(subset=["3PL_Part"])
+        cache.uom_mapping_df["Conversion_Factor"] = cache.uom_mapping_df["Conversion_Factor"].astype(float)
     except FileNotFoundError as e:
         print(f"\tFailed to load UOM Mappings (File Not Found): {e}")
         raise
@@ -173,49 +207,51 @@ def load_mapping_files(
     print("Loading live-query datasets...")
 
     print("\tLoading Plant name mapping...")
-    cache.plant_name_mapping_df = backend.load(
+    cache.plant_name_mapping_df = _coerce_string_columns(backend.load(
         'plant_name_mapping', queries['plant_name_mapping'],
-        file_paths.plant_name_mapping_file_path, pd.read_csv, dtype=str)
+        file_paths.plant_name_mapping_file_path, pd.read_csv, dtype=str))
 
     print("\tLoading material master...")
-    cache.material_master_df = backend.load(
+    cache.material_master_df = _coerce_string_columns(backend.load(
         'material_master', queries['material_master'],
-        file_paths.material_master_file_path, pd.read_csv, dtype=str)
+        file_paths.material_master_file_path, pd.read_csv, dtype=str))
 
     print("\tLoading lot number master...")
-    cache.lot_no_master_df = backend.load(
+    cache.lot_no_master_df = _coerce_string_columns(backend.load(
         'lot_no_master', queries['lot_no_master'],
-        file_paths.lot_no_master_file_path, pd.read_csv, dtype=str)
+        file_paths.lot_no_master_file_path, pd.read_csv, dtype=str))
 
     print("\tLoading lot number mapping...")
-    cache.lot_no_mapping_df = backend.load(
+    cache.lot_no_mapping_df = _coerce_string_columns(backend.load(
         'lot_no_mapping', queries['lot_no_mapping'],
-        file_paths.lot_no_mapping_file_path, pd.read_csv, dtype=str)
+        file_paths.lot_no_mapping_file_path, pd.read_csv, dtype=str))
+    cache.lot_no_mapping_lookup = _build_lot_no_mapping_lookup(cache.lot_no_mapping_df)
 
     print("\tLoading material description...")
-    cache.material_description_df = backend.load(
+    cache.material_description_df = _coerce_string_columns(backend.load(
         'material_description', queries['material_description'],
-        file_paths.material_description_file_path, pd.read_csv, dtype=str)
+        file_paths.material_description_file_path, pd.read_csv, dtype=str))
 
     print("\tLoading UOM master...")
-    cache.uom_master_df = backend.load(
+    cache.uom_master_df = _coerce_string_columns(backend.load(
         'uom_master', queries['uom_master'],
-        file_paths.uom_master_file_path, pd.read_csv, dtype=str)
+        file_paths.uom_master_file_path, pd.read_csv, dtype=str))
 
     print("\tLoading unit cost...")
-    cache.unit_cost_df = backend.load(
+    cache.unit_cost_df = _coerce_string_columns(backend.load(
         'unit_cost', queries['unit_cost'],
-        file_paths.unit_cost_file_path, pd.read_csv, dtype=str)
+        file_paths.unit_cost_file_path, pd.read_csv, dtype=str))
+    cache.unit_cost_df["standard_cost_usd"] = cache.unit_cost_df["standard_cost_usd"].astype(float)
 
     print("\tLoading material type...")
-    cache.material_type_df = backend.load(
+    cache.material_type_df = _coerce_string_columns(backend.load(
         'material_type', queries['material_type'],
-        file_paths.material_type_file_path, pd.read_csv, dtype=str)
+        file_paths.material_type_file_path, pd.read_csv, dtype=str))
 
     print("\tLoading Gilead receipts...")
-    cache.gil_receipts_df = backend.load(
+    cache.gil_receipts_df = _coerce_string_columns(backend.load(
         'gilead_receipts', queries['gilead_receipts'],
-        file_paths.gil_receipts_file_path, pd.read_csv, dtype=str)
+        file_paths.gil_receipts_file_path, pd.read_csv, dtype=str))
 
     print("All mapping files loaded successfully!")
     return cache

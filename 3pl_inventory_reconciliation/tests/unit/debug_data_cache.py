@@ -163,7 +163,7 @@ def main():
     # Print summary of every dataframe in the cache
     logger.info("\n--- Cache summary ---")
     _print_df_summary("header_mapping",       cache.header_mapping_df)
-    _print_df_summary("cmo_type_mapping",     cache.cmo_type_mapping_df)
+    _print_df_summary("cmo_type_mapping",     cache.pl_type_mapping_df)
     _print_df_summary("item_mapping",         cache.item_mapping_df)
     _print_df_summary("uom_mapping",          cache.uom_mapping_df)
     _print_df_summary("plant_name_mapping",   cache.plant_name_mapping_df)

@@ -52,7 +52,7 @@ for _p in [_REPO_ROOT, _PROJECT_ROOT]:
 import pandas as pd
 
 from lib.curated.data_cache import MappingFilePaths, load_mapping_files
-from lib.curated.curation_utils import curated_processing
+from lib.curated.curation_utils import curated_processing, build_header_mapping
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -182,6 +182,9 @@ def main():
     )
     logger.info("Mapping cache loaded.\n")
 
+    header_mapping = build_header_mapping(cache.header_mapping_df)
+    logger.info(f"Header mapping built — {len(header_mapping)} key(s): {sorted(header_mapping.keys())}\n")
+
     # ------------------------------------------------------------------
     # Process each CSV
     # ------------------------------------------------------------------
@@ -197,7 +200,7 @@ def main():
 
         try:
             raw_df     = pd.read_csv(raw_path, dtype=str)
-            curated_df = curated_processing(raw_df, raw_path, cache)
+            curated_df = curated_processing(raw_df, raw_path, cache, header_mapping)
             curated_df.to_csv(out_path, index=False)
             logger.info(f"Output: {out_path}")
             _print_df_summary(file_stem, curated_df)

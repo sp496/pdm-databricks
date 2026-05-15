@@ -29,7 +29,7 @@ import pandas as pd
 import numpy as np
 
 from lib.curated.data_cache import MappingFilePaths, load_mapping_files
-from lib.curated.curation_utils import curated_processing
+from lib.curated.curation_utils import curated_processing, build_header_mapping
 from lib.raw.discovery import (
     get_latest_completed_quarter,
     discover_mapping_files,
@@ -175,6 +175,16 @@ dbutils.fs.rm(f"dbfs:{curated_quarter_root}", recurse=True)
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC #### Pre-build header mapping
+
+# COMMAND ----------
+
+header_mapping = build_header_mapping(mapping_cache.header_mapping_df)
+print(f"Header mapping built — {len(header_mapping)} site/sheet key(s): {sorted(header_mapping.keys())}")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC #### Discover raw CSV files to process
 
 # COMMAND ----------
@@ -208,7 +218,7 @@ for site_id, raw_paths in raw_files_by_site.items():
         print(f"  Output : {out_path}")
         try:
             raw_df     = pd.read_csv(dbfs_path(raw_path), dtype=str)
-            curated_df = curated_processing(raw_df, raw_path, mapping_cache)
+            curated_df = curated_processing(raw_df, raw_path, mapping_cache, header_mapping)
             dbutils.fs.mkdirs(f"dbfs:{out_dir}")
             curated_df.to_csv(dbfs_path(out_path), index=False)
             print(f"  Wrote {curated_df.shape[0]} rows to {out_path}")
