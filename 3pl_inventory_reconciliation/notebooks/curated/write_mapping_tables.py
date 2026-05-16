@@ -5,9 +5,10 @@
 # MAGIC %md
 # MAGIC ## 3PL Inventory — Write Mapping Tables
 # MAGIC Loads the file-based mapping datasets (header mapping, item mapping, UOM mapping,
-# MAGIC SAP report) for the target segment/quarter and writes each to a partitioned Delta table.
+# MAGIC SAP report) for each configured segment/quarter and writes each to a partitioned
+# MAGIC Delta table.
 # MAGIC
-# MAGIC Run this notebook once per segment/quarter after the raw processing notebook completes
+# MAGIC Run this notebook once per quarter after the raw processing notebook completes
 # MAGIC and the mapping Excel files are in place.
 
 # COMMAND ----------
@@ -36,11 +37,8 @@ from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
-env     = dbutils.widgets.get("DATAENV")
-segment = dbutils.widgets.get("SEGMENT")
-
+env = dbutils.widgets.get("DATAENV")
 print(f"Environment : {env}")
-print(f"Segment     : {segment}")
 
 # COMMAND ----------
 
@@ -49,80 +47,38 @@ print(f"Segment     : {segment}")
 
 # COMMAND ----------
 
-curated_cfg  = load_config(os.path.join(project_root, "config/curated.json"))
+curated_cfg = load_config(os.path.join(project_root, "config/curated.json"))
 
-resolved_env     = "prod" if env == "prd" else env
-src_root         = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
-raw_root         = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
-segment_src_root = f"{src_root}/{segment}"
-run_config = curated_cfg["run_config"]
-run_mode   = run_config["run_mode"]
+resolved_env = "prod" if env == "prd" else env
+src_root     = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
+raw_root     = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
+segments     = curated_cfg["segments"]
+run_config   = curated_cfg["run_config"]
+run_mode     = run_config["run_mode"]
 
 header_mapping_table = curated_cfg["header_mapping_table"].format(env=env)
 item_mapping_table   = curated_cfg["item_mapping_table"].format(env=env)
 uom_mapping_table    = curated_cfg["uom_mapping_table"].format(env=env)
 sap_report_table     = curated_cfg["sap_report_table"].format(env=env)
 
+print(f"Segments : {segments}")
 print(f"Run mode : {run_mode}")
 
-# Resolve year/quarter
 if run_mode == "historical":
-    year    = run_config.get("year")
-    quarter = run_config.get("quarter")
-    if not year or not quarter:
+    hist_year    = run_config.get("year")
+    hist_quarter = run_config.get("quarter")
+    if not hist_year or not hist_quarter:
         raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
-    print(f"Historical load: year={year}, quarter={quarter}")
-else:
-    from lib.discovery import get_latest_completed_quarter
-    year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
-    if not year or not quarter:
-        raise RuntimeError(f"No completed quarter found under {segment_src_root}")
-    print(f"Auto-detected latest completed quarter: year={year}, quarter={quarter}")
-
-src_quarter_root = f"{segment_src_root}/{year}/{quarter}"
-raw_quarter_root = f"{raw_root}/{segment}/{year}/{quarter}"
-
-print(f"Src quarter root : {src_quarter_root}")
-print(f"Raw quarter root : {raw_quarter_root}")
+    print(f"Historical load: year={hist_year}, quarter={hist_quarter}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Discover files and load cache
+# MAGIC #### Write helper
 
 # COMMAND ----------
 
-mapping_paths = discover_mapping_files(dbutils, src_quarter_root)
-print(f"Mapping files: {mapping_paths}")
-
-if not mapping_paths.get("api") or not mapping_paths.get("dp"):
-    raise FileNotFoundError(f"Could not find api/dp mapping files under {src_quarter_root}/mapping_files")
-
-sap_report_path = discover_sap_file(dbutils, raw_quarter_root)
-if sap_report_path:
-    print(f"SAP report   : {sap_report_path}")
-else:
-    print(f"SAP report   : not found under {raw_quarter_root}/sap_report_files — will skip sap_report table")
-
-file_paths = MappingFilePaths(
-    api_mapping_file_path     = dbfs_path(mapping_paths["api"]),
-    dp_mapping_file_path      = dbfs_path(mapping_paths["dp"]),
-    header_mapping_sheet_name = "Header Mapping",
-    item_mapping_sheet_name   = "Item Mapping",
-    uom_mapping_sheet_name    = "UOM Mapping",
-    sap_report_file_path      = dbfs_path(sap_report_path) if sap_report_path else None,
-)
-
-cache = load_file_mappings(file_paths)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Write to Delta tables
-
-# COMMAND ----------
-
-def _write_delta(df: pd.DataFrame, table: str, label: str) -> None:
+def _write_delta(df: pd.DataFrame, table: str, label: str, segment: str, year: str, quarter: str) -> None:
     df = df.copy()
     df["Segment"] = segment
     df["Year"]    = year
@@ -138,16 +94,101 @@ def _write_delta(df: pd.DataFrame, table: str, label: str) -> None:
     )
     print(f"  {label}: wrote {len(df)} rows to {table}")
 
+# COMMAND ----------
 
-print(f"\nWriting mapping tables for {segment} / {year} / {quarter}")
+# MAGIC %md
+# MAGIC #### Process each segment
 
-_write_delta(cache.header_mapping_df, header_mapping_table, "header_mapping")
-_write_delta(cache.item_mapping_df,   item_mapping_table,   "item_mapping")
-_write_delta(cache.uom_mapping_df,    uom_mapping_table,    "uom_mapping")
+# COMMAND ----------
 
-if cache.sap_report_df is not None:
-    _write_delta(cache.sap_report_df, sap_report_table, "sap_report")
-else:
-    print(f"  sap_report: skipped (no SAP report found)")
+from lib.discovery import get_latest_completed_quarter
 
-print("\nDone.")
+all_errors = []
+
+for segment in segments:
+    print(f"\n{'='*60}")
+    print(f"Segment: {segment}")
+    print(f"{'='*60}")
+
+    segment_src_root = f"{src_root}/{segment}"
+    raw_quarter_root_base = f"{raw_root}/{segment}"
+
+    # ------------------------------------------------------------------
+    # Resolve year/quarter
+    # ------------------------------------------------------------------
+    if run_mode == "historical":
+        year    = hist_year
+        quarter = hist_quarter
+        print(f"  Using historical: year={year}, quarter={quarter}")
+    else:
+        year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
+        if not year or not quarter:
+            print(f"  No completed quarter found under {segment_src_root} — skipping segment")
+            all_errors.append((segment, "quarter detection", "No completed quarter found"))
+            continue
+        print(f"  Auto-detected latest completed quarter: year={year}, quarter={quarter}")
+
+    src_quarter_root = f"{segment_src_root}/{year}/{quarter}"
+    raw_quarter_root = f"{raw_quarter_root_base}/{year}/{quarter}"
+
+    print(f"  Src quarter root : {src_quarter_root}")
+    print(f"  Raw quarter root : {raw_quarter_root}")
+
+    # ------------------------------------------------------------------
+    # Discover files
+    # ------------------------------------------------------------------
+    try:
+        mapping_paths = discover_mapping_files(dbutils, src_quarter_root)
+        print(f"  Mapping files: {mapping_paths}")
+
+        if not mapping_paths.get("api") or not mapping_paths.get("dp"):
+            print(f"  Could not find api/dp mapping files under {src_quarter_root}/mapping_files — skipping segment")
+            all_errors.append((segment, "file discovery", "Missing api/dp mapping files"))
+            continue
+
+        sap_report_path = discover_sap_file(dbutils, raw_quarter_root)
+        if sap_report_path:
+            print(f"  SAP report   : {sap_report_path}")
+        else:
+            print(f"  SAP report   : not found under {raw_quarter_root}/sap_report_files — will skip sap_report table")
+
+        file_paths = MappingFilePaths(
+            api_mapping_file_path     = dbfs_path(mapping_paths["api"]),
+            dp_mapping_file_path      = dbfs_path(mapping_paths["dp"]),
+            header_mapping_sheet_name = "Header Mapping",
+            item_mapping_sheet_name   = "Item Mapping",
+            uom_mapping_sheet_name    = "UOM Mapping",
+            sap_report_file_path      = dbfs_path(sap_report_path) if sap_report_path else None,
+        )
+
+        cache = load_file_mappings(file_paths)
+
+    except Exception as e:
+        print(f"  ERROR loading files for {segment}: {e}")
+        all_errors.append((segment, "file loading", str(e)))
+        continue
+
+    # ------------------------------------------------------------------
+    # Write to Delta tables
+    # ------------------------------------------------------------------
+    print(f"\n  Writing mapping tables for {segment} / {year} / {quarter}")
+
+    _write_delta(cache.header_mapping_df, header_mapping_table, "header_mapping", segment, year, quarter)
+    _write_delta(cache.item_mapping_df,   item_mapping_table,   "item_mapping",   segment, year, quarter)
+    _write_delta(cache.uom_mapping_df,    uom_mapping_table,    "uom_mapping",    segment, year, quarter)
+
+    if cache.sap_report_df is not None:
+        _write_delta(cache.sap_report_df, sap_report_table, "sap_report", segment, year, quarter)
+    else:
+        print(f"  sap_report: skipped (no SAP report found)")
+
+# COMMAND ----------
+
+print(f"\n{'='*60}")
+print(f"Write mapping tables complete")
+print(f"  Segments processed : {len(segments)}")
+print(f"  Errors             : {len(all_errors)}")
+if all_errors:
+    print("  Failed segments:")
+    for seg, stage, err in all_errors:
+        print(f"    [{seg}] {stage}: {err}")
