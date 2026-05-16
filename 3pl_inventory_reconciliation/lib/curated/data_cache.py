@@ -161,15 +161,15 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
             file_paths.api_mapping_file_path,
             file_paths.header_mapping_sheet_name
         )
-        print(f"\tSuccessfully loaded and combined Header Mappings ({len(cache.header_mapping_df)} rows)")
+        print(f"\tSuccessfully loaded and combined Header Mapping ({len(cache.header_mapping_df)} rows)")
         cache.header_mapping = build_header_mapping(cache.header_mapping_df)
         cache.pl_type_mapping_df = cache.header_mapping_df[['3PL', '3PL_Type']].drop_duplicates(
             ignore_index=True).astype(str)
     except FileNotFoundError as e:
-        print(f"\tFailed to load Header Mappings (File Not Found): {e}")
+        print(f"\tFailed to load Header Mapping (File Not Found): {e}")
         raise
     except Exception as e:
-        print(f"\tFailed to load Header Mappings: {e}")
+        print(f"\tFailed to load Header Mapping: {e}")
         raise
 
     try:

@@ -106,9 +106,9 @@ print(f"Reference base: {ref_base}")
 file_paths = MappingFilePaths(
     api_mapping_file_path     = dbfs_path(mapping_paths["api"]),
     dp_mapping_file_path      = dbfs_path(mapping_paths["dp"]),
-    header_mapping_sheet_name = curated_cfg["header_mapping_sheet_name"],
-    item_mapping_sheet_name   = curated_cfg["item_mapping_sheet_name"],
-    uom_mapping_sheet_name    = curated_cfg["uom_mapping_sheet_name"],
+    header_mapping_sheet_name = "Header Mapping",
+    item_mapping_sheet_name   = "Item Mapping",
+    uom_mapping_sheet_name    = "UOM Mapping",
     sap_report_file_path      = dbfs_path(sap_report_path) if sap_report_path else None,
 )
 

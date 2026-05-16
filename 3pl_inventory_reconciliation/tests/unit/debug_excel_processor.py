@@ -52,7 +52,7 @@ SEGMENT            = "commercial"
 
 MAPPING_FILE_API   = os.path.join(_FIXTURES_DIR, "api_mapping_2026_Q1.xlsx")
 MAPPING_FILE_DP    = os.path.join(_FIXTURES_DIR, "dp_mapping_2026_Q1.xlsx")
-MAPPING_SHEET_NAME = "Header Mappings"
+MAPPING_SHEET_NAME = "Header Mapping"
 
 SAP_FILE           = os.path.join(_FIXTURES_DIR, "WRTRR1226 - Inventory Quantity - Q1 2026.xlsx")  # set to an xlsx path to also test process_sap_file
 

@@ -303,27 +303,30 @@ def get_material_type(df: pd.DataFrame, material_type_df: pd.DataFrame) -> pd.Da
 # ---------------------------------------------------------------------------
 
 _OUTPUT_COLUMNS = [
+    # Business columns
     "Segment",
     "3PL",
     "3PL_Name",
+    "3PL_Material_Code",
     "Gilead_Material_Code",
+    "3PL_Batch_Number",
     "Gilead_Batch_Number",
+    "3PL_UOM",
     "Gilead_UOM",
     "Conversion_Factor",
-    "3PL_Material_Code",
-    "3PL_Batch_Number",
     "3PL_Quantity",
     "3PL_Converted_Quantity",
-    "3PL_UOM",
-    "3PL_Material_Type",
     "Cost",
+    "3PL_Material_Type",
     "3PL_Type",
+    # Validation
+    "Has_Error",
+    "Validation_Remark",
+    # Metadata
     "File_Name",
     "Year",
     "Quarter",
     "Date_Processed",
-    "Has_Error",
-    "Validation_Remark",
 ]
 
 

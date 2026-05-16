@@ -50,7 +50,7 @@ raw_data_dir         = config["raw_data_dir"]
 segments          = config["segments"]
 run_config        = config["run_config"]
 run_mode          = run_config["run_mode"]
-header_sheet_name = "Header Mappings"
+header_sheet_name = "Header Mapping"
 
 src_root = f"{src_bkt_mount_point}/{src_data_dir}"
 tgt_root = f"{data_bkt_mount_point}/{raw_data_dir}"
