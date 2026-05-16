@@ -61,7 +61,8 @@ print(f"Environment : {env}")
 curated_cfg  = load_config(os.path.join(project_root, "config/curated.json"))
 data_source  = "spark" if env == "prd" else "starburst"
 
-src_root      = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=env)}"
+resolved_env  = "prod" if env == "prd" else env
+src_root      = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
 raw_root      = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
 ref_base      = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['ref_data_dir']}"
 curated_table = curated_cfg["curated_table"].format(env=env)

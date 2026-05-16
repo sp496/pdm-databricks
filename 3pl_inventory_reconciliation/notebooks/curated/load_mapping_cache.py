@@ -51,7 +51,8 @@ print(f"Data source  : {data_source}")
 
 curated_cfg  = load_config(os.path.join(project_root, "config/curated.json"))
 
-src_root         = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=env)}"
+resolved_env     = "prod" if env == "prd" else env
+src_root         = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
 raw_root         = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
 segment_src_root = f"{src_root}/{segment}"
 run_config = curated_cfg["run_config"]
