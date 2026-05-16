@@ -8,7 +8,7 @@ or Starburst connection required.
 PyCharm Setup (one-time):
   1. Right-click `3pl_inventory_reconciliation/` → Mark Directory as → Sources Root
   2. Ensure your interpreter has: pandas, openpyxl   (pip install -r requirements.txt)
-  3. Press the green Run button, or set breakpoints in curation_utils.py and press Debug.
+  3. Press the green Run button, or set breakpoints in transformations.py and press Debug.
 
 Input: raw CSV files (output of the raw processing notebook)
 ---------------------------------------------------------------
@@ -51,8 +51,8 @@ for _p in [_REPO_ROOT, _PROJECT_ROOT]:
 
 import pandas as pd
 
-from lib.curated.data_cache import MappingFilePaths, load_mapping_files
-from lib.curated.curation_utils import curated_processing, build_header_mapping
+from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_files
+from lib.curated.transformations import curated_processing
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -71,12 +71,15 @@ SEGMENT = "commercial"
 SITE_ID = "1205"   # must match folder name AND the 3PL column in the mapping Excel
 
 FILE_PATHS = MappingFilePaths(
-    api_mapping_file_path          = os.path.join(_FIXTURES_DIR, "api_mapping_2026_Q1.xlsx"),
-    dp_mapping_file_path           = os.path.join(_FIXTURES_DIR, "dp_mapping_2026_Q1.xlsx"),
-    header_mapping_sheet_name      = "Header Mappings",
-    item_mapping_sheet_name        = "Item Mapping",
-    uom_mapping_sheet_name         = "UOM Mapping",
-    sap_report_file_path           = os.path.join(_FIXTURES_DIR, "sap_report.csv"),
+    api_mapping_file_path     = os.path.join(_FIXTURES_DIR, "api_mapping_2026_Q1.xlsx"),
+    dp_mapping_file_path      = os.path.join(_FIXTURES_DIR, "dp_mapping_2026_Q1.xlsx"),
+    header_mapping_sheet_name = "Header Mappings",
+    item_mapping_sheet_name   = "Item Mapping",
+    uom_mapping_sheet_name    = "UOM Mapping",
+    sap_report_file_path      = os.path.join(_FIXTURES_DIR, "sap_report.csv"),
+)
+
+REF_PATHS = RefFilePaths(
     plant_name_mapping_file_path   = os.path.join(_CURATED_DIR, "plant_name_mapping.csv"),
     material_master_file_path      = os.path.join(_CURATED_DIR, "material_master.csv"),
     lot_no_master_file_path        = os.path.join(_CURATED_DIR, "lot_no_master.csv"),
@@ -115,17 +118,17 @@ def _warn_missing_files() -> None:
         FILE_PATHS.api_mapping_file_path,
         FILE_PATHS.dp_mapping_file_path,
         FILE_PATHS.sap_report_file_path,
-        FILE_PATHS.plant_name_mapping_file_path,
-        FILE_PATHS.material_master_file_path,
-        FILE_PATHS.lot_no_master_file_path,
-        FILE_PATHS.lot_no_mapping_file_path,
-        FILE_PATHS.material_description_file_path,
-        FILE_PATHS.uom_master_file_path,
-        FILE_PATHS.unit_cost_file_path,
-        FILE_PATHS.material_type_file_path,
-        FILE_PATHS.gil_receipts_file_path,
+        REF_PATHS.plant_name_mapping_file_path,
+        REF_PATHS.material_master_file_path,
+        REF_PATHS.lot_no_master_file_path,
+        REF_PATHS.lot_no_mapping_file_path,
+        REF_PATHS.material_description_file_path,
+        REF_PATHS.uom_master_file_path,
+        REF_PATHS.unit_cost_file_path,
+        REF_PATHS.material_type_file_path,
+        REF_PATHS.gil_receipts_file_path,
     ]
-    missing = [p for p in required if not os.path.exists(p)]
+    missing = [p for p in required if p and not os.path.exists(p)]
     if missing:
         logger.warning("The following files are missing:")
         for p in missing:
@@ -176,14 +179,14 @@ def main():
     logger.info("Loading mapping cache...")
     cache = load_mapping_files(
         file_paths  = FILE_PATHS,
+        ref_paths   = REF_PATHS,
         year        = YEAR,
         quarter     = QUARTER,
         data_source = "file",
     )
     logger.info("Mapping cache loaded.\n")
 
-    header_mapping = build_header_mapping(cache.header_mapping_df)
-    logger.info(f"Header mapping built — {len(header_mapping)} key(s): {sorted(header_mapping.keys())}\n")
+    logger.info(f"Header mapping built — {len(cache.header_mapping)} key(s): {sorted(cache.header_mapping.keys())}\n")
 
     # ------------------------------------------------------------------
     # Process each CSV
@@ -200,7 +203,7 @@ def main():
 
         try:
             raw_df     = pd.read_csv(raw_path, dtype=str)
-            curated_df = curated_processing(raw_df, raw_path, cache, header_mapping)
+            curated_df = curated_processing(raw_df, raw_path, cache, SEGMENT)
             curated_df.to_csv(out_path, index=False)
             logger.info(f"Output: {out_path}")
             _print_df_summary(file_stem, curated_df)

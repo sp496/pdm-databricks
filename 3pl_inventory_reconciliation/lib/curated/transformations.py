@@ -1,4 +1,4 @@
-"""Transformation utilities for the 3PL curated processing layer.
+"""Transformation functions for the 3PL curated processing layer.
 
 Column name conventions (post data_cache _COL_CLEAN_PATTERN cleaning):
     3PL                  — site/plant ID column from the mapping Excel
@@ -27,8 +27,7 @@ def get_site_id(file_path: str) -> str:
 # Metadata enrichment
 # ---------------------------------------------------------------------------
 
-def add_3pl_details(df: pd.DataFrame, file_path: str, plant_name_mapping_df: pd.DataFrame, pl_type_mapping_df: pd.DataFrame) -> pd.DataFrame:
-    site_id = get_site_id(file_path)
+def add_3pl_details(df: pd.DataFrame, site_id: str, plant_name_mapping_df: pd.DataFrame, pl_type_mapping_df: pd.DataFrame) -> pd.DataFrame:
     df["3PL"] = site_id
 
     pl_type_dict = pl_type_mapping_df.set_index("3PL")["3PL_Type"].to_dict()
@@ -46,48 +45,12 @@ def add_metadata(df: pd.DataFrame, file_path: str) -> pd.DataFrame:
     df["Date_Processed"] = pd.Timestamp.today().strftime("%Y-%m-%d")
     df["Year"] = path_obj.parts[-5]
     df["Quarter"] = path_obj.parts[-4]
-    df["Has_Error"] = False
     return df
 
 
 # ---------------------------------------------------------------------------
 # Header mapping
 # ---------------------------------------------------------------------------
-
-def build_header_mapping(header_mapping_df: pd.DataFrame) -> dict:
-    """Normalise the header mapping DataFrame and build a lookup dict.
-
-    Call this once after loading the mapping cache, then pass the result
-    to map_filter_3pl_df for every file — avoids rebuilding per file.
-
-    Returns {combined_key: {3pl_col: gilead_col}} where combined_key is
-    either "{site_id}_{sheet_name}" or plain "{site_id}" for single-sheet sites.
-    """
-    hdf = header_mapping_df.dropna(subset=["3PL"]).copy()
-    hdf["Sheet_Name"] = (
-        hdf.groupby("3PL")["Sheet_Name"].ffill()
-        .str.lower()
-        .replace("nan", np.nan)
-    )
-    hdf["3PL_Column_Header"] = (
-        hdf["3PL_Column_Header"].str.lower().str.strip().str.replace(r"\s+", " ", regex=True)
-    )
-    hdf["3PL"] = hdf["3PL"].astype("int").astype("str")
-    hdf["combined_key"] = hdf.apply(
-        lambda row: (
-            f"{row['3PL']}_{row['Sheet_Name'].replace(' ', '_')}"
-            if pd.notna(row.get("Sheet_Name")) and row.get("Sheet_Name")
-            else row["3PL"]
-        ),
-        axis=1,
-    )
-    return (
-        hdf.groupby("combined_key")
-        .apply(lambda g: dict(zip(g["3PL_Column_Header"], g["Gilead_Column_Header"])))
-        .to_dict()
-    )
-
-
 
 def postprocess_mapped_df(df: pd.DataFrame) -> pd.DataFrame:
     df["3PL_Material_Code"] = df["3PL_Material_Code"].str.replace(r"\.0$", "", regex=True)
@@ -101,16 +64,15 @@ def postprocess_mapped_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def map_filter_3pl_df(df: pd.DataFrame, site_id: str, file_path: str, header_mapping: dict) -> pd.DataFrame:
+def map_3pl_df(df: pd.DataFrame, site_id: str, file_stem: str, header_mapping: dict) -> pd.DataFrame:
     # Try sheet-aware key first (e.g. "1205_gilead_api_inventory_by_weight"),
     # then fall back to the plain site key (e.g. "1205") for single-sheet files.
-    file_stem = os.path.splitext(os.path.basename(file_path))[0].lower().replace(" ", "_")
     sheet_key = f"{site_id}_{file_stem}"
     column_mapping = header_mapping.get(sheet_key) or header_mapping.get(site_id)
     if column_mapping is None:
         raise KeyError(
             f"No header mapping found for site '{site_id}' "
-            f"(tried '{sheet_key}' and '{site_id}')"
+            f"(tried '{sheet_key}' and '{site_id}' — file stem: '{file_stem}')"
         )
 
     complex_mappings = {}
@@ -158,7 +120,7 @@ def map_filter_3pl_df(df: pd.DataFrame, site_id: str, file_path: str, header_map
     if "3PL_UOM" not in df.columns:
         df["3PL_UOM"] = None
 
-    df = df[["3PL", "3PL_Name", "3PL_Material_Code", "3PL_Batch_Number", "3PL_Quantity", "3PL_UOM", "3PL_Type"]]
+    df = df[["3PL_Material_Code", "3PL_Batch_Number", "3PL_Quantity", "3PL_UOM"]]
     return df
 
 
@@ -209,7 +171,7 @@ def map_material_code(df: pd.DataFrame, item_mapping_df: pd.DataFrame, material_
     df.loc[mask_invalid, "Has_Error"] = True
 
     mask_null = df["3PL_Material_Code"].isna()
-    df.loc[mask_null, "Validation_Remark"] = "Material Code is NULL in 3PL file"
+    df.loc[mask_null, "Validation_Remark"] = "Material Code is NULL in 3PL File"
     df.loc[mask_null, "Has_Error"] = True
 
     return df
@@ -341,6 +303,7 @@ def get_material_type(df: pd.DataFrame, material_type_df: pd.DataFrame) -> pd.Da
 # ---------------------------------------------------------------------------
 
 _OUTPUT_COLUMNS = [
+    "Segment",
     "3PL",
     "3PL_Name",
     "Gilead_Material_Code",
@@ -364,18 +327,20 @@ _OUTPUT_COLUMNS = [
 ]
 
 
-def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: MappingDataCache, header_mapping: dict) -> pd.DataFrame:
+def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: MappingDataCache, segment: str = "") -> pd.DataFrame:
     """Apply the full curation pipeline to a single raw 3PL CSV.
 
     Args:
-        header_mapping: pre-built dict from build_header_mapping(). Build this
-            once per run (after loading the cache) and pass it to every call.
+        mapping_cache: fully loaded cache including pre-built header_mapping dict.
+        segment: business segment (e.g. 'commercial', 'clinical'). Written to
+            the Segment column and used as a partition key in the Delta table.
 
     Returns a DataFrame with the columns defined in _OUTPUT_COLUMNS.
     """
     df = raw_df.copy()
+    header_mapping = mapping_cache.header_mapping
 
-    df.columns = df.columns.str.lower()
+    df.columns = df.columns.str.lower().str.strip().str.replace(r"\s+", " ", regex=True)
     site_id = get_site_id(raw_file_path)
 
     # Filter to only the source columns this site's mapping references,
@@ -392,11 +357,11 @@ def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: 
 
     print(f"\n  Site: {site_id}  |  input shape: {df.shape}")
 
-    print("    Adding 3PL details")
-    df = add_3pl_details(df, raw_file_path, mapping_cache.plant_name_mapping_df, mapping_cache.pl_type_mapping_df)
-
     print("    Applying header mapping")
-    df = map_filter_3pl_df(df, site_id, raw_file_path, header_mapping)
+    df = map_3pl_df(df, site_id, file_stem, header_mapping)
+
+    print("    Adding 3PL details")
+    df = add_3pl_details(df, site_id, mapping_cache.plant_name_mapping_df, mapping_cache.pl_type_mapping_df)
 
     print("    Post-processing mapped columns")
     df = postprocess_mapped_df(df)
@@ -406,6 +371,9 @@ def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: 
 
     print("    Aggregating quantities")
     df = aggregate_quantities(df)
+
+    df["Has_Error"] = False
+    df["Validation_Remark"] = None
 
     print("    Mapping material codes")
     df = map_material_code(df, mapping_cache.item_mapping_df, mapping_cache.material_master_df)
@@ -422,6 +390,7 @@ def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: 
     print("    Getting material type")
     df = get_material_type(df, mapping_cache.material_type_df)
 
+    df["Segment"] = segment
     df = df[_OUTPUT_COLUMNS]
     print(f"    Done — output shape: {df.shape}")
     return df

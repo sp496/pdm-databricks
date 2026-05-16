@@ -6,10 +6,9 @@
 # MAGIC ## 3PL Inventory — Load Mapping Cache
 # MAGIC Loads all reference/mapping data into a `MappingDataCache` for the target quarter.
 # MAGIC
-# MAGIC **DATA_SOURCE options:**
-# MAGIC - `spark` — prod: queries run via Spark SQL against Databricks tables
-# MAGIC - `starburst` — dev: queries run via Starburst/Trino JDBC
-# MAGIC - `file` — local fallback only, skips all live queries
+# MAGIC Data source is derived from the environment:
+# MAGIC - `prd` → `spark` (Spark SQL against Databricks tables)
+# MAGIC - any other env → `starburst` (Starburst/Trino JDBC)
 
 # COMMAND ----------
 
@@ -23,8 +22,8 @@ sys.path.extend([project_root, repo_root])
 
 # COMMAND ----------
 
-from lib.curated.data_cache import MappingFilePaths, load_mapping_files, load_file_mappings
-from lib.raw.discovery import discover_mapping_files, get_latest_completed_quarter
+from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_files, load_file_mappings
+from lib.discovery import discover_mapping_files, discover_sap_file, get_latest_completed_quarter
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
 
@@ -35,16 +34,12 @@ from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
-env             = dbutils.widgets.get("DATAENV")
-year_override   = dbutils.widgets.get("YEAR").strip()
-quarter_override = dbutils.widgets.get("QUARTER").strip()
-segment         = dbutils.widgets.get("SEGMENT")
-data_source     = dbutils.widgets.get("DATA_SOURCE").strip().lower()
+env         = dbutils.widgets.get("DATAENV")
+segment     = dbutils.widgets.get("SEGMENT")
+data_source = "spark" if env == "prd" else "starburst"
 
 print(f"Environment  : {env}")
 print(f"Segment      : {segment}")
-print(f"Year         : {year_override or '(auto-detect)'}")
-print(f"Quarter      : {quarter_override or '(auto-detect)'}")
 print(f"Data source  : {data_source}")
 
 # COMMAND ----------
@@ -54,26 +49,32 @@ print(f"Data source  : {data_source}")
 
 # COMMAND ----------
 
-config       = load_config(os.path.join(project_root, "config/raw.json"))
 curated_cfg  = load_config(os.path.join(project_root, "config/curated.json"))
 
-resolved_env = "prod" if env == "prd" else env
+src_root         = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=env)}"
+raw_root         = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
+segment_src_root = f"{src_root}/{segment}"
+run_mode         = curated_cfg["run_mode"]
 
-src_root = f"{config['src_bkt_mount_point']}/{config['src_data_dir'].format(env=resolved_env)}"
-segment_root = f"{src_root}/{segment}"
+print(f"Run mode : {run_mode}")
 
 # Resolve year/quarter
-if year_override and quarter_override:
-    year, quarter = year_override, quarter_override
-    print(f"Using override: year={year}, quarter={quarter}")
-else:
-    year, quarter = get_latest_completed_quarter(dbutils, segment_root)
+if run_mode == "historical":
+    year    = curated_cfg.get("year")
+    quarter = curated_cfg.get("quarter")
     if not year or not quarter:
-        raise RuntimeError(f"No completed quarter found under {segment_root}")
+        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in config")
+    print(f"Historical load: year={year}, quarter={quarter}")
+else:
+    year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
+    if not year or not quarter:
+        raise RuntimeError(f"No completed quarter found under {segment_src_root}")
     print(f"Auto-detected latest completed quarter: year={year}, quarter={quarter}")
 
-quarter_root = f"{segment_root}/{year}/{quarter}"
-print(f"Quarter root : {quarter_root}")
+src_quarter_root = f"{segment_src_root}/{year}/{quarter}"
+raw_quarter_root = f"{raw_root}/{segment}/{year}/{quarter}"
+print(f"Src quarter root : {src_quarter_root}")
+print(f"Raw quarter root : {raw_quarter_root}")
 
 # COMMAND ----------
 
@@ -82,32 +83,34 @@ print(f"Quarter root : {quarter_root}")
 
 # COMMAND ----------
 
-# Mapping Excel files — discovered from the landing zone
-mapping_paths = discover_mapping_files(dbutils, quarter_root)
+# Mapping Excel files — discovered from the landing zone (source bucket)
+mapping_paths = discover_mapping_files(dbutils, src_quarter_root)
 print(f"Discovered mapping files: {mapping_paths}")
 
 if not mapping_paths.get("api") or not mapping_paths.get("dp"):
-    raise FileNotFoundError(f"Could not find api/dp mapping files under {quarter_root}/mapping_files")
+    raise FileNotFoundError(f"Could not find api/dp mapping files under {src_quarter_root}/mapping_files")
 
-# SAP report
-sap_report_dir  = f"{quarter_root}/sap_report_files"
-sap_report_files = dbutils.fs.ls(sap_report_dir)
-if not sap_report_files:
-    raise FileNotFoundError(f"No SAP report found under {sap_report_dir}")
-sap_report_path = sap_report_files[0].path
-print(f"SAP report   : {sap_report_path}")
+# SAP report — processed CSV from the raw layer
+sap_report_path = discover_sap_file(dbutils, raw_quarter_root)
+if sap_report_path:
+    print(f"SAP report   : {sap_report_path}")
+else:
+    print(f"SAP report   : not found under {raw_quarter_root}/sap_report_files — continuing without it")
 
 # Fallback CSV files — static reference files on the mount
-ref_base = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
+ref_base = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['ref_data_dir']}"
 print(f"Reference base: {ref_base}")
 
 file_paths = MappingFilePaths(
-    api_mapping_file_path          = dbfs_path(mapping_paths["api"]),
-    dp_mapping_file_path           = dbfs_path(mapping_paths["dp"]),
-    header_mapping_sheet_name      = config["header_mapping_sheet_name"],
-    item_mapping_sheet_name        = "Item Mapping",
-    uom_mapping_sheet_name         = "UOM Mapping",
-    sap_report_file_path           = dbfs_path(sap_report_path),
+    api_mapping_file_path     = dbfs_path(mapping_paths["api"]),
+    dp_mapping_file_path      = dbfs_path(mapping_paths["dp"]),
+    header_mapping_sheet_name = curated_cfg["header_mapping_sheet_name"],
+    item_mapping_sheet_name   = curated_cfg["item_mapping_sheet_name"],
+    uom_mapping_sheet_name    = curated_cfg["uom_mapping_sheet_name"],
+    sap_report_file_path      = dbfs_path(sap_report_path) if sap_report_path else None,
+)
+
+ref_paths = RefFilePaths(
     plant_name_mapping_file_path   = dbfs_path(f"{ref_base}/plant_name_mapping.csv"),
     material_master_file_path      = dbfs_path(f"{ref_base}/material_master.csv"),
     lot_no_master_file_path        = dbfs_path(f"{ref_base}/lot_no_master.csv"),
@@ -153,11 +156,12 @@ if data_source == "starburst":
     }
 
 cache = load_mapping_files(
-    file_paths      = file_paths,
-    year            = year,
-    quarter         = quarter,
-    data_source     = data_source,
-    starburst_config= starburst_config,
+    file_paths       = file_paths,
+    ref_paths        = ref_paths,
+    year             = year,
+    quarter          = quarter,
+    data_source      = data_source,
+    starburst_config = starburst_config,
 )
 
 # COMMAND ----------

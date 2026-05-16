@@ -1,5 +1,8 @@
 {
-  "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
-  "raw_data_dir": "3pl_inventory/raw",
-  "curated_data_dir": "3pl_inventory_reconciliation/curated"
+  "ref_data_dir": "3pl_inventory_reconciliation/raw/curation_mapping_files",
+  "curated_table":        "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`curated_3pl_inventory`",
+  "header_mapping_table": "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`header_mapping`",
+  "item_mapping_table":   "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`item_mapping`",
+  "uom_mapping_table":    "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`uom_mapping`",
+  "sap_report_table":     "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`sap_report`"
 }

@@ -44,7 +44,7 @@ for _p in [_REPO_ROOT, _PROJECT_ROOT]:
         sys.path.remove(_p)
     sys.path.insert(0, _p)
 
-from lib.raw.discovery import (
+from lib.discovery import (
     get_latest_completed_quarter,
     discover_3pl_files,
     discover_mapping_files,

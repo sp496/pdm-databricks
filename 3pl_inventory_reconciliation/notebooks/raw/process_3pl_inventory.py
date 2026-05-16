@@ -18,7 +18,7 @@ sys.path.extend([project_root, repo_root])
 
 # COMMAND ----------
 
-from lib.raw.discovery import (
+from lib.discovery import (
     get_latest_completed_quarter,
     discover_3pl_files,
     discover_mapping_files,
@@ -35,27 +35,34 @@ from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
-env              = dbutils.widgets.get("DATAENV")
-year_override    = dbutils.widgets.get("YEAR").strip()
-quarter_override = dbutils.widgets.get("QUARTER").strip()
-print(f"Environment: {env}, year_override={year_override or '(none)'}, quarter_override={quarter_override or '(none)'}")
+env = dbutils.widgets.get("DATAENV")
+print(f"Environment: {env}")
 
 # COMMAND ----------
 
 config = load_config(os.path.join(project_root, "config/raw.json"))
 resolved_env = "prod" if env == "prd" else env
 
-src_bkt_mount_point = config["src_bkt_mount_point"]
-tgt_bkt_mount_point = config["tgt_bkt_mount_point"]
-src_data_dir        = config["src_data_dir"].format(env=resolved_env)
-tgt_data_dir        = config["tgt_data_dir"]
-segments            = config["segments"]
-header_sheet_name   = config["header_mapping_sheet_name"]
+src_bkt_mount_point  = config["src_bkt_mount_point"]
+data_bkt_mount_point = config["data_bkt_mount_point"]
+src_data_dir         = config["src_data_dir"].format(env=resolved_env)
+raw_data_dir         = config["raw_data_dir"]
+segments             = config["segments"]
+run_mode             = config["run_mode"]
+header_sheet_name    = "Header Mappings"
 
 src_root = f"{src_bkt_mount_point}/{src_data_dir}"
-tgt_root = f"{tgt_bkt_mount_point}/{tgt_data_dir}"
-print(f"Source root: {src_root}")
-print(f"Target root: {tgt_root}")
+tgt_root = f"{data_bkt_mount_point}/{raw_data_dir}"
+print(f"Source root : {src_root}")
+print(f"Target root : {tgt_root}")
+print(f"Run mode    : {run_mode}")
+
+if run_mode == "historical":
+    year    = config.get("year")
+    quarter = config.get("quarter")
+    if not year or not quarter:
+        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in config")
+    print(f"Historical load: year={year}, quarter={quarter}")
 
 # COMMAND ----------
 
@@ -74,15 +81,14 @@ for segment in segments:
     # ------------------------------------------------------------------
     # Resolve quarter to process
     # ------------------------------------------------------------------
-    if year_override and quarter_override:
-        year, quarter = year_override, quarter_override
-        print(f"Using override: year={year}, quarter={quarter}")
+    if run_mode == "historical":
+        print(f"  Using historical: year={year}, quarter={quarter}")
     else:
         year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
         if not year or not quarter:
             print(f"  No completed quarter found under {segment_src_root} — skipping segment")
             continue
-        print(f"Using latest completed quarter: year={year}, quarter={quarter}")
+        print(f"  Using latest completed quarter: year={year}, quarter={quarter}")
 
     quarter_root        = f"{segment_src_root}/{year}/{quarter}"
     target_quarter_root = f"{tgt_root}/{segment}/{year}/{quarter}"
@@ -126,4 +132,4 @@ for segment in segments:
 
 # COMMAND ----------
 
-print(f"\n3PL raw processing complete for {year_override or year} {quarter_override or quarter}")
+print(f"\n3PL raw processing complete")

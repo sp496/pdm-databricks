@@ -43,7 +43,7 @@ for _p in [_REPO_ROOT, _PROJECT_ROOT]:
         sys.path.remove(_p)
     sys.path.insert(0, _p)
 
-from lib.curated.data_cache import MappingFilePaths, MappingDataCache, load_mapping_files
+from lib.curated.data_cache import MappingFilePaths, RefFilePaths, MappingDataCache, load_mapping_files
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -61,21 +61,24 @@ YEAR    = "2026"
 QUARTER = "Q1"
 
 FILE_PATHS = MappingFilePaths(
-    api_mapping_file_path        = os.path.join(_FIXTURES_DIR, "api_mapping_2026_Q1.xlsx"),
-    dp_mapping_file_path         = os.path.join(_FIXTURES_DIR, "dp_mapping_2026_Q1.xlsx"),
-    header_mapping_sheet_name    = "Header Mappings",
-    item_mapping_sheet_name      = "Item Mapping",
-    uom_mapping_sheet_name       = "UOM Mapping",
-    plant_name_mapping_file_path = os.path.join(_CURATED_DIR, "plant_name_mapping.csv"),
-    material_master_file_path    = os.path.join(_CURATED_DIR, "material_master.csv"),
-    lot_no_master_file_path      = os.path.join(_CURATED_DIR, "lot_no_master.csv"),
-    lot_no_mapping_file_path     = os.path.join(_CURATED_DIR, "lot_no_mapping.csv"),
+    api_mapping_file_path     = os.path.join(_FIXTURES_DIR, "api_mapping_2026_Q1.xlsx"),
+    dp_mapping_file_path      = os.path.join(_FIXTURES_DIR, "dp_mapping_2026_Q1.xlsx"),
+    header_mapping_sheet_name = "Header Mappings",
+    item_mapping_sheet_name   = "Item Mapping",
+    uom_mapping_sheet_name    = "UOM Mapping",
+    sap_report_file_path      = os.path.join(_FIXTURES_DIR, "sap_report.csv"),
+)
+
+REF_PATHS = RefFilePaths(
+    plant_name_mapping_file_path   = os.path.join(_CURATED_DIR, "plant_name_mapping.csv"),
+    material_master_file_path      = os.path.join(_CURATED_DIR, "material_master.csv"),
+    lot_no_master_file_path        = os.path.join(_CURATED_DIR, "lot_no_master.csv"),
+    lot_no_mapping_file_path       = os.path.join(_CURATED_DIR, "lot_no_mapping.csv"),
     material_description_file_path = os.path.join(_CURATED_DIR, "material_description.csv"),
-    uom_master_file_path         = os.path.join(_CURATED_DIR, "uom_master.csv"),
-    unit_cost_file_path          = os.path.join(_CURATED_DIR, "unit_cost.csv"),
-    material_type_file_path      = os.path.join(_CURATED_DIR, "material_type.csv"),
-    gil_receipts_file_path       = os.path.join(_CURATED_DIR, "gilead_receipts.csv"),
-    sap_report_file_path         = os.path.join(_FIXTURES_DIR, "sap_report.csv"),
+    uom_master_file_path           = os.path.join(_CURATED_DIR, "uom_master.csv"),
+    unit_cost_file_path            = os.path.join(_CURATED_DIR, "unit_cost.csv"),
+    material_type_file_path        = os.path.join(_CURATED_DIR, "material_type.csv"),
+    gil_receipts_file_path         = os.path.join(_CURATED_DIR, "gilead_receipts.csv"),
 )
 
 
@@ -96,7 +99,7 @@ def _write_outputs(cache: MappingDataCache):
     os.makedirs(_OUTPUTS_DIR, exist_ok=True)
     fields = {
         "header_mapping":       cache.header_mapping_df,
-        "cmo_type_mapping":     cache.cmo_type_mapping_df,
+        "cmo_type_mapping":     cache.pl_type_mapping_df,
         "item_mapping":         cache.item_mapping_df,
         "uom_mapping":          cache.uom_mapping_df,
         "plant_name_mapping":   cache.plant_name_mapping_df,
@@ -134,17 +137,17 @@ def main():
             FILE_PATHS.api_mapping_file_path,
             FILE_PATHS.dp_mapping_file_path,
             FILE_PATHS.sap_report_file_path,
-            FILE_PATHS.plant_name_mapping_file_path,
-            FILE_PATHS.material_master_file_path,
-            FILE_PATHS.lot_no_master_file_path,
-            FILE_PATHS.lot_no_mapping_file_path,
-            FILE_PATHS.material_description_file_path,
-            FILE_PATHS.uom_master_file_path,
-            FILE_PATHS.unit_cost_file_path,
-            FILE_PATHS.material_type_file_path,
-            FILE_PATHS.gil_receipts_file_path,
+            REF_PATHS.plant_name_mapping_file_path,
+            REF_PATHS.material_master_file_path,
+            REF_PATHS.lot_no_master_file_path,
+            REF_PATHS.lot_no_mapping_file_path,
+            REF_PATHS.material_description_file_path,
+            REF_PATHS.uom_master_file_path,
+            REF_PATHS.unit_cost_file_path,
+            REF_PATHS.material_type_file_path,
+            REF_PATHS.gil_receipts_file_path,
         ]
-        if not os.path.exists(path)
+        if path and not os.path.exists(path)
     ]
     if missing:
         logger.warning("The following fallback files are missing (queries will fail without a live connection):")
@@ -154,10 +157,11 @@ def main():
 
     # Run — data_source='file' skips connection attempts and loads directly from files
     cache = load_mapping_files(
-        file_paths=FILE_PATHS,
-        year=YEAR,
-        quarter=QUARTER,
-        data_source="file",
+        file_paths  = FILE_PATHS,
+        ref_paths   = REF_PATHS,
+        year        = YEAR,
+        quarter     = QUARTER,
+        data_source = "file",
     )
 
     # Print summary of every dataframe in the cache

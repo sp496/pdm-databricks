@@ -1,1 +1,8 @@
-{}
+{
+  "run_mode": "latest",
+  "segments": ["clinical", "commercial"],
+  "src_bkt_mount_point": "$buckets.legacy_raw.mount",
+  "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
+  "src_data_dir": "pdm-gilead-dna/{env}/gilead/supplychain/3pl_inventory_reconciliation",
+  "raw_data_dir": "3pl_inventory_reconciliation/raw"
+}

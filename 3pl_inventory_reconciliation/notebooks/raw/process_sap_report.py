@@ -18,7 +18,7 @@ sys.path.extend([project_root, repo_root])
 
 # COMMAND ----------
 
-from lib.raw.discovery import get_latest_completed_quarter, discover_sap_file
+from lib.discovery import get_latest_completed_quarter, discover_sap_file
 from lib.raw.excel_processor import process_sap_file
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
@@ -30,25 +30,31 @@ from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
-env              = dbutils.widgets.get("DATAENV")
-year_override    = dbutils.widgets.get("YEAR").strip()
-quarter_override = dbutils.widgets.get("QUARTER").strip()
-print(f"Environment: {env}, year_override={year_override or '(none)'}, quarter_override={quarter_override or '(none)'}")
+env = dbutils.widgets.get("DATAENV")
+print(f"Environment: {env}")
 
 # COMMAND ----------
 
 config = load_config(os.path.join(project_root, "config/raw.json"))
 resolved_env = "prod" if env == "prd" else env
 
-src_bkt_mount_point = config["src_bkt_mount_point"]
-tgt_bkt_mount_point = config["tgt_bkt_mount_point"]
-src_data_dir        = config["src_data_dir"].format(env=resolved_env)
-tgt_data_dir        = config["tgt_data_dir"]
+src_bkt_mount_point  = config["src_bkt_mount_point"]
+data_bkt_mount_point = config["data_bkt_mount_point"]
+src_data_dir         = config["src_data_dir"].format(env=resolved_env)
+raw_data_dir         = config["raw_data_dir"]
+run_mode             = config["run_mode"]
 
 src_root = f"{src_bkt_mount_point}/{src_data_dir}"
-tgt_root = f"{tgt_bkt_mount_point}/{tgt_data_dir}"
-print(f"Source root: {src_root}")
-print(f"Target root: {tgt_root}")
+tgt_root = f"{data_bkt_mount_point}/{raw_data_dir}"
+print(f"Source root : {src_root}")
+print(f"Target root : {tgt_root}")
+print(f"Run mode    : {run_mode}")
+
+if run_mode == "historical":
+    year    = config.get("year")
+    quarter = config.get("quarter")
+    if not year or not quarter:
+        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in config")
 
 # SAP report is commercial-only
 segment             = "commercial"
@@ -61,9 +67,8 @@ segment_src_root    = f"{src_root}/{segment}"
 
 # COMMAND ----------
 
-if year_override and quarter_override:
-    year, quarter = year_override, quarter_override
-    print(f"Using override: year={year}, quarter={quarter}")
+if run_mode == "historical":
+    print(f"Using historical: year={year}, quarter={quarter}")
 else:
     year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
     if not year or not quarter:
