@@ -54,7 +54,8 @@ curated_cfg  = load_config(os.path.join(project_root, "config/curated.json"))
 src_root         = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=env)}"
 raw_root         = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
 segment_src_root = f"{src_root}/{segment}"
-run_mode         = curated_cfg["run_mode"]
+run_config = curated_cfg["run_config"]
+run_mode   = run_config["run_mode"]
 
 header_mapping_table = curated_cfg["header_mapping_table"].format(env=env)
 item_mapping_table   = curated_cfg["item_mapping_table"].format(env=env)
@@ -65,10 +66,10 @@ print(f"Run mode : {run_mode}")
 
 # Resolve year/quarter
 if run_mode == "historical":
-    year    = curated_cfg.get("year")
-    quarter = curated_cfg.get("quarter")
+    year    = run_config.get("year")
+    quarter = run_config.get("quarter")
     if not year or not quarter:
-        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in config")
+        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
     print(f"Historical load: year={year}, quarter={quarter}")
 else:
     from lib.discovery import get_latest_completed_quarter

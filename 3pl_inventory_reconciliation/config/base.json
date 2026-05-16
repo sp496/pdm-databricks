@@ -1,5 +1,5 @@
 {
-  "run_mode": "latest",
+  "run_config": {"run_mode": "latest", "year": null, "quarter": null},
   "segments": ["clinical", "commercial"],
   "src_bkt_mount_point": "$buckets.legacy_raw.mount",
   "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",

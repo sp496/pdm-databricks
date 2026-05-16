@@ -42,7 +42,8 @@ src_bkt_mount_point  = config["src_bkt_mount_point"]
 data_bkt_mount_point = config["data_bkt_mount_point"]
 src_data_dir         = config["src_data_dir"].format(env=resolved_env)
 raw_data_dir         = config["raw_data_dir"]
-run_mode             = config["run_mode"]
+run_config = config["run_config"]
+run_mode   = run_config["run_mode"]
 
 src_root = f"{src_bkt_mount_point}/{src_data_dir}"
 tgt_root = f"{data_bkt_mount_point}/{raw_data_dir}"
@@ -51,10 +52,10 @@ print(f"Target root : {tgt_root}")
 print(f"Run mode    : {run_mode}")
 
 if run_mode == "historical":
-    year    = config.get("year")
-    quarter = config.get("quarter")
+    year    = run_config.get("year")
+    quarter = run_config.get("quarter")
     if not year or not quarter:
-        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in config")
+        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
 
 # SAP report is commercial-only
 segment             = "commercial"

@@ -65,8 +65,9 @@ src_root      = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_di
 raw_root      = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
 ref_base      = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['ref_data_dir']}"
 curated_table = curated_cfg["curated_table"].format(env=env)
-segments      = curated_cfg["segments"]
-run_mode      = curated_cfg["run_mode"]
+segments   = curated_cfg["segments"]
+run_config = curated_cfg["run_config"]
+run_mode   = run_config["run_mode"]
 
 print(f"Source root    : {src_root}")
 print(f"Raw root       : {raw_root}")
@@ -75,10 +76,10 @@ print(f"Segments       : {segments}")
 print(f"Run mode       : {run_mode}")
 
 if run_mode == "historical":
-    year    = curated_cfg.get("year")
-    quarter = curated_cfg.get("quarter")
+    year    = run_config.get("year")
+    quarter = run_config.get("quarter")
     if not year or not quarter:
-        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in config")
+        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
     print(f"Historical load: year={year}, quarter={quarter}")
 
 # COMMAND ----------
