@@ -163,7 +163,6 @@ for segment in segments:
         uom_master_file_path           = dbfs_path(f"{ref_base}/uom_master.csv"),
         unit_cost_file_path            = dbfs_path(f"{ref_base}/unit_cost.csv"),
         material_type_file_path        = dbfs_path(f"{ref_base}/material_type.csv"),
-        gil_receipts_file_path         = dbfs_path(f"{ref_base}/gilead_receipts.csv"),
     )
 
     mapping_cache  = load_mapping_files(

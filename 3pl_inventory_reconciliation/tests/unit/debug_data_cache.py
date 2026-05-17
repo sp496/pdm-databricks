@@ -22,8 +22,10 @@ Fallback files expected in tests/fixtures/curated/
   uom_master.csv
   unit_cost.csv
   material_type.csv
-  gilead_receipts.csv
   sap_report.csv
+
+  Note: gilead_receipts is intentionally excluded — it is loaded only in
+  write_mapping_tables (not in the curated processing cache).
 
 Mapping Excel files (already in tests/fixtures/):
   api_mapping_2026_Q1.xlsx
@@ -78,7 +80,7 @@ REF_PATHS = RefFilePaths(
     uom_master_file_path           = os.path.join(_CURATED_DIR, "uom_master.csv"),
     unit_cost_file_path            = os.path.join(_CURATED_DIR, "unit_cost.csv"),
     material_type_file_path        = os.path.join(_CURATED_DIR, "material_type.csv"),
-    gil_receipts_file_path         = os.path.join(_CURATED_DIR, "gilead_receipts.csv"),
+    # gil_receipts_file_path intentionally omitted — loaded only in write_mapping_tables
 )
 
 
@@ -110,7 +112,6 @@ def _write_outputs(cache: MappingDataCache):
         "uom_master":           cache.uom_master_df,
         "unit_cost":            cache.unit_cost_df,
         "material_type":        cache.material_type_df,
-        "gilead_receipts":      cache.gil_receipts_df,
         "sap_report":           cache.sap_report_df,
     }
     for name, df in fields.items():
@@ -145,7 +146,6 @@ def main():
             REF_PATHS.uom_master_file_path,
             REF_PATHS.unit_cost_file_path,
             REF_PATHS.material_type_file_path,
-            REF_PATHS.gil_receipts_file_path,
         ]
         if path and not os.path.exists(path)
     ]
@@ -178,7 +178,6 @@ def main():
     _print_df_summary("uom_master",           cache.uom_master_df)
     _print_df_summary("unit_cost",            cache.unit_cost_df)
     _print_df_summary("material_type",        cache.material_type_df)
-    _print_df_summary("gilead_receipts",      cache.gil_receipts_df)
     _print_df_summary("sap_report",           cache.sap_report_df)
 
     # Write all non-empty dataframes to outputs/curated/

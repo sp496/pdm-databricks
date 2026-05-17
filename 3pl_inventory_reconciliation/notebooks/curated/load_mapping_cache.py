@@ -121,7 +121,8 @@ ref_paths = RefFilePaths(
     uom_master_file_path           = dbfs_path(f"{ref_base}/uom_master.csv"),
     unit_cost_file_path            = dbfs_path(f"{ref_base}/unit_cost.csv"),
     material_type_file_path        = dbfs_path(f"{ref_base}/material_type.csv"),
-    gil_receipts_file_path         = dbfs_path(f"{ref_base}/gilead_receipts.csv"),
+    # gil_receipts_file_path intentionally omitted — loaded in write_mapping_tables
+    # and stored in the sap_report Delta table as Gilead_Receipts
 )
 
 # COMMAND ----------
@@ -187,7 +188,6 @@ fields = {
     "uom_master"           : cache.uom_master_df,
     "unit_cost"            : cache.unit_cost_df,
     "material_type"        : cache.material_type_df,
-    "gilead_receipts"      : cache.gil_receipts_df,
 }
 
 print(f"\n{'Dataset':<25} {'Shape':<15} {'Status'}")

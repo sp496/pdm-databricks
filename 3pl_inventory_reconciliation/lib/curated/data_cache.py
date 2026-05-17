@@ -31,16 +31,21 @@ class MappingFilePaths:
 
 @dataclass
 class RefFilePaths:
-    """Paths to the static reference CSV files on the data bucket mount."""
-    plant_name_mapping_file_path: str
-    material_master_file_path: str
-    lot_no_master_file_path: str
-    lot_no_mapping_file_path: str
-    material_description_file_path: str
-    uom_master_file_path: str
-    unit_cost_file_path: str
-    material_type_file_path: str
-    gil_receipts_file_path: str
+    """Paths to the static reference CSV files on the data bucket mount.
+
+    All fields are optional — set a field to None (or omit it) to skip loading
+    that dataset entirely.  Only the datasets whose path is provided will be
+    fetched (live query + CSV fallback).
+    """
+    plant_name_mapping_file_path:   Optional[str] = None
+    material_master_file_path:      Optional[str] = None
+    lot_no_master_file_path:        Optional[str] = None
+    lot_no_mapping_file_path:       Optional[str] = None
+    material_description_file_path: Optional[str] = None
+    uom_master_file_path:           Optional[str] = None
+    unit_cost_file_path:            Optional[str] = None
+    material_type_file_path:        Optional[str] = None
+    gil_receipts_file_path:         Optional[str] = None
 
 
 class MappingDataCache:
@@ -249,52 +254,61 @@ def load_mapping_files(
 
     print("Loading live-query datasets...")
 
-    print("\tLoading Plant name mapping...")
-    cache.plant_name_mapping_df = _coerce_string_columns(backend.load(
-        'plant_name_mapping', queries['plant_name_mapping'],
-        ref_paths.plant_name_mapping_file_path, pd.read_csv, dtype=str))
+    if ref_paths.plant_name_mapping_file_path is not None:
+        print("\tLoading Plant name mapping...")
+        cache.plant_name_mapping_df = _coerce_string_columns(backend.load(
+            'plant_name_mapping', queries['plant_name_mapping'],
+            ref_paths.plant_name_mapping_file_path, pd.read_csv, dtype=str))
 
-    print("\tLoading material master...")
-    cache.material_master_df = _coerce_string_columns(backend.load(
-        'material_master', queries['material_master'],
-        ref_paths.material_master_file_path, pd.read_csv, dtype=str))
+    if ref_paths.material_master_file_path is not None:
+        print("\tLoading material master...")
+        cache.material_master_df = _coerce_string_columns(backend.load(
+            'material_master', queries['material_master'],
+            ref_paths.material_master_file_path, pd.read_csv, dtype=str))
 
-    print("\tLoading lot number master...")
-    cache.lot_no_master_df = _coerce_string_columns(backend.load(
-        'lot_no_master', queries['lot_no_master'],
-        ref_paths.lot_no_master_file_path, pd.read_csv, dtype=str))
+    if ref_paths.lot_no_master_file_path is not None:
+        print("\tLoading lot number master...")
+        cache.lot_no_master_df = _coerce_string_columns(backend.load(
+            'lot_no_master', queries['lot_no_master'],
+            ref_paths.lot_no_master_file_path, pd.read_csv, dtype=str))
 
-    print("\tLoading lot number mapping...")
-    cache.lot_no_mapping_df = _coerce_string_columns(backend.load(
-        'lot_no_mapping', queries['lot_no_mapping'],
-        ref_paths.lot_no_mapping_file_path, pd.read_csv, dtype=str))
-    cache.lot_no_mapping_lookup = _build_lot_no_mapping_lookup(cache.lot_no_mapping_df)
+    if ref_paths.lot_no_mapping_file_path is not None:
+        print("\tLoading lot number mapping...")
+        cache.lot_no_mapping_df = _coerce_string_columns(backend.load(
+            'lot_no_mapping', queries['lot_no_mapping'],
+            ref_paths.lot_no_mapping_file_path, pd.read_csv, dtype=str))
+        cache.lot_no_mapping_lookup = _build_lot_no_mapping_lookup(cache.lot_no_mapping_df)
 
-    print("\tLoading material description...")
-    cache.material_description_df = _coerce_string_columns(backend.load(
-        'material_description', queries['material_description'],
-        ref_paths.material_description_file_path, pd.read_csv, dtype=str))
+    if ref_paths.material_description_file_path is not None:
+        print("\tLoading material description...")
+        cache.material_description_df = _coerce_string_columns(backend.load(
+            'material_description', queries['material_description'],
+            ref_paths.material_description_file_path, pd.read_csv, dtype=str))
 
-    print("\tLoading UOM master...")
-    cache.uom_master_df = _coerce_string_columns(backend.load(
-        'uom_master', queries['uom_master'],
-        ref_paths.uom_master_file_path, pd.read_csv, dtype=str))
+    if ref_paths.uom_master_file_path is not None:
+        print("\tLoading UOM master...")
+        cache.uom_master_df = _coerce_string_columns(backend.load(
+            'uom_master', queries['uom_master'],
+            ref_paths.uom_master_file_path, pd.read_csv, dtype=str))
 
-    print("\tLoading unit cost...")
-    cache.unit_cost_df = _coerce_string_columns(backend.load(
-        'unit_cost', queries['unit_cost'],
-        ref_paths.unit_cost_file_path, pd.read_csv, dtype=str))
-    cache.unit_cost_df["standard_cost_usd"] = cache.unit_cost_df["standard_cost_usd"].astype(float)
+    if ref_paths.unit_cost_file_path is not None:
+        print("\tLoading unit cost...")
+        cache.unit_cost_df = _coerce_string_columns(backend.load(
+            'unit_cost', queries['unit_cost'],
+            ref_paths.unit_cost_file_path, pd.read_csv, dtype=str))
+        cache.unit_cost_df["standard_cost_usd"] = cache.unit_cost_df["standard_cost_usd"].astype(float)
 
-    print("\tLoading material type...")
-    cache.material_type_df = _coerce_string_columns(backend.load(
-        'material_type', queries['material_type'],
-        ref_paths.material_type_file_path, pd.read_csv, dtype=str))
+    if ref_paths.material_type_file_path is not None:
+        print("\tLoading material type...")
+        cache.material_type_df = _coerce_string_columns(backend.load(
+            'material_type', queries['material_type'],
+            ref_paths.material_type_file_path, pd.read_csv, dtype=str))
 
-    print("\tLoading Gilead receipts...")
-    cache.gil_receipts_df = _coerce_string_columns(backend.load(
-        'gilead_receipts', queries['gilead_receipts'],
-        ref_paths.gil_receipts_file_path, pd.read_csv, dtype=str))
+    if ref_paths.gil_receipts_file_path is not None:
+        print("\tLoading Gilead receipts...")
+        cache.gil_receipts_df = _coerce_string_columns(backend.load(
+            'gilead_receipts', queries['gilead_receipts'],
+            ref_paths.gil_receipts_file_path, pd.read_csv, dtype=str))
 
-    print("All mapping files loaded successfully!")
+    print("Live-query datasets loaded successfully!")
     return cache

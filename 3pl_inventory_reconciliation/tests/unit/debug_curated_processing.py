@@ -33,7 +33,10 @@ Reference / mapping files (already in tests/fixtures/):
 Fallback CSV files expected in tests/fixtures/curated/
   plant_name_mapping.csv    material_master.csv    lot_no_master.csv
   lot_no_mapping.csv        material_description.csv  uom_master.csv
-  unit_cost.csv             material_type.csv      gilead_receipts.csv
+  unit_cost.csv             material_type.csv
+
+  Note: gilead_receipts is intentionally excluded — it is loaded only in
+  write_mapping_tables and stored in the sap_report Delta table.
 """
 
 import os
@@ -88,7 +91,7 @@ REF_PATHS = RefFilePaths(
     uom_master_file_path           = os.path.join(_CURATED_DIR, "uom_master.csv"),
     unit_cost_file_path            = os.path.join(_CURATED_DIR, "unit_cost.csv"),
     material_type_file_path        = os.path.join(_CURATED_DIR, "material_type.csv"),
-    gil_receipts_file_path         = os.path.join(_CURATED_DIR, "gilead_receipts.csv"),
+    # gil_receipts_file_path intentionally omitted — loaded only in write_mapping_tables
 )
 
 # Root of the raw fixture tree — CSVs live at:
@@ -126,7 +129,6 @@ def _warn_missing_files() -> None:
         REF_PATHS.uom_master_file_path,
         REF_PATHS.unit_cost_file_path,
         REF_PATHS.material_type_file_path,
-        REF_PATHS.gil_receipts_file_path,
     ]
     missing = [p for p in required if p and not os.path.exists(p)]
     if missing:

@@ -25,7 +25,8 @@ sys.path.extend([project_root, repo_root])
 
 import pandas as pd
 
-from lib.curated.data_cache import MappingFilePaths, load_file_mappings
+from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_files
+from lib.curated.transformations import match_gilead_receipts
 from lib.discovery import discover_mapping_files, discover_sap_file
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
@@ -37,8 +38,11 @@ from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
-env = dbutils.widgets.get("DATAENV")
-print(f"Environment : {env}")
+env         = dbutils.widgets.get("DATAENV")
+data_source = "spark" if env == "prd" else "starburst"
+
+print(f"Environment  : {env}")
+print(f"Data source  : {data_source}")
 
 # COMMAND ----------
 
@@ -61,8 +65,21 @@ item_mapping_table   = curated_cfg["item_mapping_table"].format(env=env)
 uom_mapping_table    = curated_cfg["uom_mapping_table"].format(env=env)
 sap_report_table     = curated_cfg["sap_report_table"].format(env=env)
 
+ref_base = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['ref_data_dir']}"
+
 print(f"Segments : {segments}")
 print(f"Run mode : {run_mode}")
+
+# Starburst config — only used in non-prod environments
+starburst_config = None
+if data_source == "starburst":
+    starburst_config = {
+        "base_url"        : "jdbc:trino://query.gilead.com:443",
+        "username"        : dbutils.secrets.get(scope="pdm-gsc", key="starburst-username"),
+        "password"        : dbutils.secrets.get(scope="pdm-gsc", key="starburst-password"),
+        "default_catalog" : "pdm",
+        "default_schema"  : "default",
+    }
 
 if run_mode == "historical":
     hist_year    = run_config.get("year")
@@ -161,7 +178,19 @@ for segment in segments:
             sap_report_file_path      = dbfs_path(sap_report_path) if sap_report_path else None,
         )
 
-        cache = load_file_mappings(file_paths)
+        # Only request Gilead receipts — all other ref datasets are not needed here
+        ref_paths = RefFilePaths(
+            gil_receipts_file_path = dbfs_path(f"{ref_base}/gilead_receipts.csv"),
+        )
+
+        cache = load_mapping_files(
+            file_paths       = file_paths,
+            ref_paths        = ref_paths,
+            year             = year,
+            quarter          = quarter,
+            data_source      = data_source,
+            starburst_config = starburst_config,
+        )
 
     except Exception as e:
         print(f"  ERROR loading files for {segment}: {e}")
@@ -178,7 +207,13 @@ for segment in segments:
     _write_delta(cache.uom_mapping_df,    uom_mapping_table,    "uom_mapping",    segment, year, quarter)
 
     if cache.sap_report_df is not None:
-        _write_delta(cache.sap_report_df, sap_report_table, "sap_report", segment, year, quarter)
+        sap_df = cache.sap_report_df
+        if cache.gil_receipts_df is not None:
+            sap_df = match_gilead_receipts(sap_df, cache.gil_receipts_df)
+            print(f"  sap_report: Gilead_Receipts enrichment applied")
+        else:
+            print(f"  sap_report: Gilead receipts not available — Gilead_Receipts will be null")
+        _write_delta(sap_df, sap_report_table, "sap_report", segment, year, quarter)
     else:
         print(f"  sap_report: skipped (no SAP report found)")
 
