@@ -105,11 +105,12 @@ CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`sap_rep
     `Group_Valuation_Standard_Price`                  STRING,
     `Price_Unit`                                      STRING,
     `Reporting_Unit_of_Measure_Conversion_Rate`       STRING,
-    `Stock_Quantity__Base_UOM_`                       STRING,
+    `Stock_Quantity__Base_UOM_`                       DOUBLE,
     `Value_of_Total_Valuated_Stock`                   STRING,
     `Reporting_Unit_of_Measure_Quantity`              STRING,
     `Standard_Extended_Cost`                          STRING,
-    `Group_Valuation_Standard_Cost`                   STRING,
+    `Group_Valuation_Standard_Cost`                   DOUBLE,
+    `Gilead_Receipts`                                 STRING,
     `Segment`                                         STRING,
     `Year`                                            STRING,
     `Quarter`                                         STRING
@@ -138,6 +139,7 @@ CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`curated
     `Cost`                    DOUBLE,
     `3PL_Material_Type`       STRING,
     `3PL_Type`                STRING,
+    `Material_Description`    STRING,
     `Has_Error`               BOOLEAN,
     `Validation_Remark`       STRING,
     `File_Name`               STRING,
@@ -148,4 +150,50 @@ CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`curated
 USING DELTA
 PARTITIONED BY (Year, Quarter)
 COMMENT '3PL inventory reconciliation curated layer'
+""")
+
+# COMMAND ----------
+
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`reconciled_3pl_inventory` (
+    `Plant_Number`                        STRING,
+    `Plant_Name`                          STRING,
+    `External_Material_Group`             STRING,
+    `Material_Number`                     STRING,
+    `Gilead_Material_Code`                STRING,
+    `Material_Description`                STRING,
+    `Cost_ea`                             DOUBLE,
+    `Cost_ea_per_unit`                    DOUBLE,
+    `Group_Valuation_Standard_Cost`       DOUBLE,
+    `Cost`                                DOUBLE,
+    `Batch_Number`                        STRING,
+    `Stock_OH`                            DOUBLE,
+    `UOM`                                 STRING,
+    `3PL_Quantity`                        DOUBLE,
+    `3PL_Converted_Quantity`              DOUBLE,
+    `3PL_UOM`                             STRING,
+    `3PL`                                 STRING,
+    `3PL_Name`                            STRING,
+    `3PL_Type`                            STRING,
+    `3PL_Material_Code`                   STRING,
+    `3PL_Material_Type`                   STRING,
+    `Line_item_variance_threshold_amount` INTEGER,
+    `Gilead_Receipts`                     STRING,
+    `File_Name`                           STRING,
+    `Date_Processed`                      STRING,
+    `Has_Error`                           BOOLEAN,
+    `Validation_Remark`                   STRING,
+    `Gilead_Batch_Number`                 STRING,
+    `3PL_Batch_Number`                    STRING,
+    `Plant_Classification`                STRING,
+    `Effective_Material_Code`             STRING,
+    `Effective_Batch_Number`              STRING,
+    `Processing_Timestamp`                STRING,
+    `Segment`                             STRING,
+    `Year`                                STRING,
+    `Quarter`                             STRING
+)
+USING DELTA
+PARTITIONED BY (Segment, Year, Quarter)
+COMMENT '3PL inventory reconciliation — reconciled output (all segments)'
 """)

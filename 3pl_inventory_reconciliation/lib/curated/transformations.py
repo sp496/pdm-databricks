@@ -1,5 +1,14 @@
 """Transformation functions for the 3PL curated processing layer.
 
+Shared utilities
+----------------
+remove_decimal_if_all_zeros  — strips trailing '.0', '.00', etc. from batch/
+                               material strings produced by pandas float→string
+                               conversion.  Used here when normalising
+                               Gilead_Batch_Number after lot-number mapping,
+                               and in write_mapping_tables when normalising the
+                               SAP Batch_Number before writing to the Delta table.
+
 Column name conventions (post data_cache _COL_CLEAN_PATTERN cleaning):
     3PL                  — site/plant ID column from the mapping Excel
     3PL_Column_Header    — 3PL column name column from the mapping Excel
@@ -13,6 +22,24 @@ import pandas as pd
 from pathlib import Path
 
 from .data_cache import MappingDataCache
+
+
+# ---------------------------------------------------------------------------
+# Shared utilities
+# ---------------------------------------------------------------------------
+
+def remove_decimal_if_all_zeros(value):
+    """Strip trailing '.0', '.00', etc. from a string batch/material number.
+
+    Pandas sometimes serialises integer-valued floats as '123456.0' when
+    converting numeric columns to strings.  This function removes that suffix
+    so batch numbers join correctly against SAP values.
+    """
+    if isinstance(value, str):
+        parts = value.split(".")
+        if len(parts) == 2 and all(c == "0" for c in parts[1]):
+            return parts[0]
+    return value
 
 # ---------------------------------------------------------------------------
 # Path helpers
@@ -206,6 +233,11 @@ def map_lot_no_wildcard(df: pd.DataFrame, lot_number_master_df: pd.DataFrame, lo
                 break
 
     # ------------------------------------------------------------------
+    # Normalise batch numbers before validation
+    # ------------------------------------------------------------------
+    df["Gilead_Batch_Number"] = df["Gilead_Batch_Number"].apply(remove_decimal_if_all_zeros)
+
+    # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
     mask_invalid_batch = (
@@ -319,6 +351,7 @@ _OUTPUT_COLUMNS = [
     "Cost",
     "3PL_Material_Type",
     "3PL_Type",
+    "Material_Description",
     # Validation
     "Has_Error",
     "Validation_Remark",
@@ -393,10 +426,33 @@ def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: 
     print("    Getting material type")
     df = get_material_type(df, mapping_cache.material_type_df)
 
+    print("    Enriching material descriptions")
+    df = enrich_material_description(df, mapping_cache.material_description_df, "Gilead_Material_Code")
+
     df["Segment"] = segment
     df = df[_OUTPUT_COLUMNS]
     print(f"    Done — output shape: {df.shape}")
     return df
+
+
+# ---------------------------------------------------------------------------
+# Material description enrichment (curated pipeline + SAP write time)
+# ---------------------------------------------------------------------------
+
+def enrich_material_description(df: pd.DataFrame, material_description_df: pd.DataFrame, join_key: str) -> pd.DataFrame:
+    """Left-join material descriptions onto df and uppercase the result.
+
+    Used in two places:
+      - curated pipeline: join_key = 'Gilead_Material_Code'
+      - write_mapping_tables (SAP): join_key = 'Material_Number'
+
+    Both sources come from the same makt table query so descriptions are
+    consistent across the two sides of the processed-layer reconciliation.
+    """
+    mat_desc = material_description_df[["matnr", "Material_Description"]].copy()
+    df = df.merge(mat_desc, how="left", left_on=join_key, right_on="matnr")
+    df["Material_Description"] = df["Material_Description"].str.upper()
+    return df.drop(columns=["matnr"])
 
 
 # ---------------------------------------------------------------------------
