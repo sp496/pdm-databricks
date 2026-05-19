@@ -39,39 +39,13 @@ subject_summary_table = f"`pdm-pdm-gsc-bi-{env}`.`clinical_inventory`.`clinical_
 # COMMAND ----------
 
 
-def read_latest_data(table_name: str, date_column: str) -> pd.DataFrame:
-    """
-    Reads the latest data from a Databricks table based on the specified date column.
-
-    Args:
-        table_name (str): The full table name (e.g., 'schema.table_name' or 'catalog.schema.table_name').
-        date_column (str): The name of the column containing date or timestamp values.
-
-    Returns:
-        pd.DataFrame: A Pandas DataFrame containing only the latest data.
-    """
-    # Get the latest date value
-    latest_date_df = spark.sql(f"SELECT MAX({date_column}) AS latest_date FROM {table_name}")
-    latest_date = latest_date_df.collect()[0]['latest_date']
-
-    if latest_date is None:
-        raise ValueError(f"No data found in table {table_name} for column {date_column}")
-
-    # Filter data for only the latest date
-    latest_data_df = spark.sql(f"""
-        SELECT * 
-        FROM {table_name}
-        WHERE {date_column} = '{latest_date}'
-    """)
-
-    # Convert to Pandas
-    pandas_df = latest_data_df.toPandas()
-    return pandas_df
-
-
-# COMMAND ----------
-
-df_subjects = read_latest_data(subject_summary_table, "extract_date")
+df_subjects = spark.sql(f"""
+    SELECT * FROM {subject_summary_table} t
+    WHERE t.extract_date = (
+        SELECT MAX(t2.extract_date) FROM {subject_summary_table} t2
+        WHERE t2.study_protocol = t.study_protocol
+    )
+""").toPandas()
 df_mapping = spark.table(treatment_group_mapping_table).toPandas()
 df_mapping = df_mapping[
     df_mapping[['visit_days', 'dispensing_quantity', 'dispensing_frequency_days']].notna().all(axis=1)]
