@@ -1,0 +1,3 @@
+{
+  "reconciled_table": "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`reconciled_3pl_inventory`"
+}

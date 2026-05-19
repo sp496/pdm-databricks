@@ -1,0 +1,11 @@
+{
+  "run_config": {"run_mode": "latest", "year": null, "quarter": null},
+  "segments": ["clinical", "commercial"],
+  "src_bkt_mount_point": "$buckets.legacy_raw.mount",
+  "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
+  "src_data_dir": "pdm-gilead-dna/{env}/gilead/supplychain/3pl_inventory_reconciliation",
+  "raw_data_dir": "3pl_inventory_reconciliation/raw",
+  "curated_table":        "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`curated_3pl_inventory`",
+  "header_mapping_table": "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`header_mapping`",
+  "sap_report_table":     "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`sap_report`"
+}

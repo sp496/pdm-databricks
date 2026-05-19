@@ -129,3 +129,8 @@ demand_forecast.csv
 clinical_inventory_optimization/tests/fixtures/*.xlsx
 clinical_inventory_optimization/tests/fixtures/sample_csvs/*.csv
 clinical_inventory_optimization/tests/outputs/
+
+# 3PL Inventory Reconciliation
+3pl_inventory_reconciliation/tests/fixtures/*.xlsx
+3pl_inventory_reconciliation/tests/fixtures/sample_csvs/*.xlsx
+3pl_inventory_reconciliation/tests/outputs/

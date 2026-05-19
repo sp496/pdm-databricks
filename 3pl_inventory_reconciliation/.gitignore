@@ -1,0 +1,3 @@
+# Un-ignore the lib/ source directory for this subdirectory
+!lib/
+!lib/**

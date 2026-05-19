@@ -1,0 +1,4 @@
+{
+  "mapping_bkt_mount_point": "$buckets.legacy_raw.mount",
+  "mapping_dir": "pdm-gilead-dna/{env}/gilead/supplychain/3pl_inventory/mapping"
+}
