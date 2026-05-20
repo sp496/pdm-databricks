@@ -176,7 +176,7 @@ site_depot_df = pd.read_excel(site_depot_mapping_file_path_full, dtype=str)
 logger.info(f"Site-Depot mapping loaded: {site_depot_df.shape}")
 
 # Initialize DataCurator with mapping
-curator = DataCurator(subject_mapping_df=ss_header_mapping_df, depot_mapping_df=d_header_mapping_df, site_mapping_df=s_header_mapping_df)
+curator = DataCurator(subject_mapping_df=ss_header_mapping_df, depot_mapping_df=d_header_mapping_df, site_mapping_df=s_header_mapping_df, site_depot_mapping_df=site_depot_df)
 logger.info("DataCurator initialized with mapping file")
 
 # COMMAND ----------
@@ -808,19 +808,19 @@ for date_folder in selected_folders:
             if 'subject' in files:
                 subject_path, _ = files['subject']
                 subject_df = read_excel_with_dynamic_header(subject_path)
-                assembled = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
+                assembled = curator.assemble_subject_visit_data(visit_df, subject_df)
                 accumulated_files['subject'].append((assembled, visit_name))
 
             if 'depot' in files:
                 depot_path, depot_name = files['depot']
                 depot_df = read_excel_with_dynamic_header(depot_path)
-                assembled = curator.assemble_depot_data(depot_df, site_depot_df)
+                assembled = curator.assemble_depot_data(depot_df)
                 accumulated_files['depot'].append((assembled, depot_name))
 
             if 'site' in files:
                 site_path, site_name = files['site']
                 site_df = read_excel_with_dynamic_header(site_path)
-                assembled = curator.assemble_site_data(site_df, site_depot_df)
+                assembled = curator.assemble_site_data(site_df)
                 accumulated_files['site'].append((assembled, site_name))
 
             for ft in ('slsm', 'clsm'):

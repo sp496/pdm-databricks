@@ -28,10 +28,10 @@ _THIS_DIR     = os.path.dirname(os.path.abspath(__file__))        # .../tests/un
 _TESTS_DIR    = os.path.dirname(_THIS_DIR)                        # .../tests
 _PROJECT_ROOT = os.path.dirname(_TESTS_DIR)                       # .../clinical_inventory_optimization
 _REPO_ROOT    = os.path.dirname(_PROJECT_ROOT)                    # .../pdm-databricks
-for _p in [_PROJECT_ROOT, _REPO_ROOT]:
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
+for _p in [_REPO_ROOT, _PROJECT_ROOT]:
+    if _p in sys.path:
+        sys.path.remove(_p)
+    sys.path.insert(0, _p)
 # ---------------------------------------------------------------------------
 # Imports (no Databricks / pyspark required)
 # ---------------------------------------------------------------------------
@@ -55,9 +55,9 @@ _OUTPUTS_DIR    = os.path.join(_TESTS_DIR, "outputs")
 # Excel mapping files — place in tests/fixtures/ and update filenames below.
 # Set to None if you don't have the file locally; standardization will be skipped.
 LOCAL_MAPPING = {
-    "subject":    r"../fixtures/Subject Summary Header Mapping.xlsx",
+    "subject":    None,#r"../fixtures/Subject Summary Header Mapping.xlsx",
     "depot":      None,#r"../fixtures/Depot Inventory Header Mapping.xlsx",
-    "site":       None,#r"../fixtures/Site Inventory Header Mapping.xlsx",
+    "site":       r"../fixtures/Site Inventory Header Mapping.xlsx",
     "slsm":       None,
     "clsm":       None,
     "site_depot": r"../fixtures/Site-Depot Mapping.xlsx",
@@ -68,12 +68,12 @@ LOCAL_MAPPING = {
 # If subject_visit is set, subject is treated as the Subject Summary and assembly
 # is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
-    "subject":       r"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Summary2026-05-06-15-33-02.xlsx",
-    "depot":         r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
-    "site":          r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsSite2026-05-06-15-33-02.xlsx",
+    "subject":       None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Summary2026-05-06-15-33-02.xlsx",
+    "depot":         None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
+    "site":          r"../fixtures/sample_csvs/Gilead GS-US-320-1092_Inventory Summary (Unblinded)Site Inventory Summary2026-05-19-13-25-53.csv",
     "slsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
     "clsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
-    "subject_visit": r"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Visit Summary2026-05-06-15-33-02.xlsx",
+    "subject_visit": None,#"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Visit Summary2026-05-06-15-33-02.xlsx",
 }
 
 # Date folder string — the extract date stamped on the source files
@@ -238,12 +238,24 @@ def main():
     # ------------------------------------------------------------------
     # 2. Initialise DataCurator
     # ------------------------------------------------------------------
+    site_depot_path = LOCAL_MAPPING.get("site_depot")
+    site_depot_df = (
+        pd.read_excel(site_depot_path, dtype=str)
+        if site_depot_path and os.path.exists(site_depot_path)
+        else None
+    )
+    if site_depot_df is not None:
+        logger.info(f"  site_depot mapping: {len(site_depot_df)} rows")
+    else:
+        logger.info("  site_depot mapping: not loaded")
+
     curator = DataCurator(
         subject_mapping_df=mapping["subject"],
         depot_mapping_df=mapping["depot"],
         site_mapping_df=mapping["site"],
         slsm_mapping_df=mapping["slsm"],
         clsm_mapping_df=mapping["clsm"],
+        site_depot_mapping_df=site_depot_df,
     )
 
     # ------------------------------------------------------------------
@@ -268,23 +280,20 @@ def main():
 
         # Subject with visit summary: assemble from 3 files then process normally
         if file_type == "subject" and LOCAL_CSV.get("subject_visit"):
-            visit_path      = LOCAL_CSV["subject_visit"]
-            site_depot_path = LOCAL_MAPPING.get("site_depot")
+            visit_path = LOCAL_CSV["subject_visit"]
 
-            missing = [p for p in [visit_path, site_depot_path] if not p or not os.path.exists(p)]
-            if missing:
-                logger.warning(f"  Assembly file(s) not found — skipping: {missing}")
+            if curator.site_depot_mapping_df is None or not os.path.exists(visit_path):
+                logger.warning(f"  Assembly file(s) not found — skipping: visit_path={visit_path}, "
+                               f"site_depot loaded={curator.site_depot_mapping_df is not None}")
                 continue
 
             logger.info(f"  subject_summary : {csv_path}")
             logger.info(f"  visit_summary   : {visit_path}")
-            logger.info(f"  site_depot_map  : {site_depot_path}")
 
-            visit_df      = read_excel_with_dynamic_header(visit_path)
-            subject_df    = read_excel_with_dynamic_header(csv_path)
-            site_depot_df = pd.read_excel(site_depot_path, dtype=str)
+            visit_df   = read_excel_with_dynamic_header(visit_path)
+            subject_df = read_excel_with_dynamic_header(csv_path)
 
-            assembled_df = curator.assemble_subject_visit_data(visit_df, subject_df, site_depot_df)
+            assembled_df = curator.assemble_subject_visit_data(visit_df, subject_df)
 
             result_df = curator.process_data(
                 assembled_df,
@@ -297,19 +306,14 @@ def main():
 
         # Depot inventory: pivot Drug Status into quantity columns when EDGE-Lung mode is active
         elif file_type == "depot" and LOCAL_CSV.get("subject_visit"):
-            site_depot_path = LOCAL_MAPPING.get("site_depot")
-
-            missing = [p for p in [site_depot_path] if not p or not os.path.exists(p)]
-            if missing:
-                logger.warning(f"  Assembly file(s) not found — skipping: {missing}")
+            if curator.site_depot_mapping_df is None:
+                logger.warning("  site_depot mapping not loaded — skipping depot assembly")
                 continue
 
             logger.info(f"  depot_inventory : {csv_path}")
-            logger.info(f"  site_depot_map  : {site_depot_path}")
 
             depot_df = read_excel_with_dynamic_header(csv_path)
-            site_depot_df = pd.read_excel(site_depot_path, dtype=str)
-            assembled_depot_df = curator.assemble_depot_data(depot_df, site_depot_df)
+            assembled_depot_df = curator.assemble_depot_data(depot_df)
 
             result_df = curator.process_data(
                 assembled_depot_df,
@@ -322,20 +326,15 @@ def main():
 
         # Site inventory: join depot mapping and pivot when EDGE-Lung mode is active
         elif file_type == "site" and LOCAL_CSV.get("subject_visit"):
-            site_depot_path = LOCAL_MAPPING.get("site_depot")
-
-            missing = [p for p in [site_depot_path] if not p or not os.path.exists(p)]
-            if missing:
-                logger.warning(f"  Assembly file(s) not found — skipping: {missing}")
+            if curator.site_depot_mapping_df is None:
+                logger.warning("  site_depot mapping not loaded — skipping site assembly")
                 continue
 
             logger.info(f"  site_inventory : {csv_path}")
-            logger.info(f"  site_depot_map : {site_depot_path}")
 
             site_df = read_excel_with_dynamic_header(csv_path)
-            site_depot_df = pd.read_excel(site_depot_path, dtype=str)
 
-            assembled_site_df = curator.assemble_site_data(site_df, site_depot_df)
+            assembled_site_df = curator.assemble_site_data(site_df)
 
             result_df = curator.process_data(
                 assembled_site_df,

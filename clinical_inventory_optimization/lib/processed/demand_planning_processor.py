@@ -52,7 +52,7 @@ class Config:
     # OUTPUT_FILE = "test_scenarios/01_simple_single_drug/demand_forecast.csv"
 
     SUBJECT_SUMMARY_FILE = "clinical_subject_summary.csv"
-    TREATMENT_MAPPING_FILE = "treatment_group_mapping.csv"
+    TREATMENT_MAPPING_FILE = "treatment_group_mapping_.csv"
     OUTPUT_FILE = "demand_forecast.csv"
 
     # Column mappings for standardization
@@ -168,7 +168,7 @@ class DataLoader:
         logger.info(f"Loading subject data from {filepath}")
 
         try:
-            df = pd.read_csv(filepath)
+            df = pd.read_csv(filepath, dtype=str)
             logger.info(f"Loaded {len(df)} subject records from file")
             return DataLoader.prepare_subject_data(df)
 
@@ -227,56 +227,77 @@ class TextProcessor:
         return text.strip()
 
     @staticmethod
-    def parse_cycle_day(visit_string: str) -> int:
+    def parse_cycle_day(visit_string: str, dispensing_frequency: float = 28, visit_count_per_cycle: int = 1) -> int:
         """
-        Parse the day number from visit strings like 'TPC C20D1' or 'Cycle 46 Day 8'
-
-        Args:
-            visit_string: String describing the visit
-
-        Returns:
-            Day number (defaults to 1 if unparsable)
+        Parse the day number from visit strings. Supported shapes:
+          - 'TPC C20D1', 'Cycle 46 Day 8'         → day from explicit Day token
+          - 'Randomization/Blinded Treatment Day 1' → day from explicit Day token
+          - 'Blinded Treatment Week 04'           → computed from week_num and dispensing_frequency
         """
         if pd.isna(visit_string):
             return 1
 
         visit_str = str(visit_string)
 
-        # Try to match patterns like D1, Day 1, Day1
-        match = re.search(r'(?:D|Day\s?)(\d+)', visit_str, re.IGNORECASE)
-        if match:
+        # 1) Explicit Day token
+        day_match = re.search(r'(?:D|Day\s?)(\d+)', visit_str, re.IGNORECASE)
+        if day_match:
             try:
-                return int(match.group(1))
+                return int(day_match.group(1))
             except ValueError:
                 return 1
 
-        # If it's a cycle string without a day, assume day 1
-        if 'cycle' in visit_str.lower():
-            return 1
+        # 2) Week token → compute day from offset
+        week_match = re.search(r'Week\s?(\d+)', visit_str, re.IGNORECASE)
+        if week_match:
+            try:
+                week_num = int(week_match.group(1))
+                freq = 28 if pd.isna(dispensing_frequency) else int(dispensing_frequency)
+                if freq <= 0:
+                    freq = 28
+                offset = week_num * 7
+                return offset % freq + 1
+            except ValueError:
+                return 1
 
+        # 3) Cycle without Day → assume day 1
         return 1
 
     @staticmethod
-    def parse_cycle_number(visit_string: str) -> int:
+    def parse_cycle_number(visit_string: str, dispensing_frequency: float = 28, visit_count_per_cycle: int = 1) -> int:
         """
-        Parse the cycle number from visit strings like 'TPC C20D1' or 'Cycle 46 Day 8'
-
-        Args:
-            visit_string: String describing the visit
-
-        Returns:
-            Cycle number (defaults to 0 if unparsable)
+        Parse the cycle number from visit strings. Supported shapes:
+          - 'TPC C20D1', 'Cycle 46 Day 8'         → explicit cycle
+          - 'Randomization/Blinded Treatment Day 1' → cycle 1 (Day-only string)
+          - 'Blinded Treatment Week 04'           → computed from week_num and dispensing_frequency
         """
         if pd.isna(visit_string):
             return 0
 
         visit_str = str(visit_string)
 
-        # Try to match patterns like C20, Cycle 46, Cycle46
-        match = re.search(r'(?:C|Cycle\s?)(\d+)', visit_str, re.IGNORECASE)
-        if match:
+        # 1) Explicit Cycle token
+        cycle_match = re.search(r'(?:C|Cycle\s?)(\d+)', visit_str, re.IGNORECASE)
+        if cycle_match:
             try:
-                return int(match.group(1))
+                return int(cycle_match.group(1))
+            except ValueError:
+                return 0
+
+        # 2) Day-only string (no Cycle) → cycle 1
+        if re.search(r'(?:D|Day\s?)(\d+)', visit_str, re.IGNORECASE):
+            return 1
+
+        # 3) Week token → compute cycle from offset
+        week_match = re.search(r'Week\s?(\d+)', visit_str, re.IGNORECASE)
+        if week_match:
+            try:
+                week_num = int(week_match.group(1))
+                freq = 28 if pd.isna(dispensing_frequency) else int(dispensing_frequency)
+                if freq <= 0:
+                    freq = 28
+                offset = week_num * 7
+                return offset // freq + 1
             except ValueError:
                 return 0
 
@@ -356,12 +377,19 @@ class VisitProjector:
             is_crossover = row.get('is_crossover', False)
             is_tpc = row.get('is_tpc', False)
 
-            # Get max cycles (optional constraint - hard cap on cycle numbers)
-            max_cycles = row.get('max_cycles', None)
-            if not pd.isna(max_cycles) and max_cycles >= 1:
-                max_cycles = int(max_cycles)
-            else:
-                max_cycles = None  # No cycle limit, only time limit applies
+            # Cycle range this row covers (staggered mapping support).
+            # Single non-staggered rows get start_cycle=1, end_cycle=max_cycles (or None).
+            start_cycle = row.get('start_cycle', 1)
+            start_cycle = int(start_cycle) if not pd.isna(start_cycle) else 1
+            end_cycle_raw = row.get('end_cycle', None)
+            end_cycle = int(end_cycle_raw) if (end_cycle_raw is not None and not pd.isna(end_cycle_raw)) else None
+
+            def in_range(cycle: int) -> bool:
+                if cycle < start_cycle:
+                    return False
+                if end_cycle is not None and cycle > end_cycle:
+                    return False
+                return True
 
             # Calculate Day 1 of the last recorded cycle (current cycle)
             time_to_subtract = timedelta(days=last_day_number - 1)
@@ -390,10 +418,10 @@ class VisitProjector:
                 # Only include if the projected date is:
                 # 1. After the last recorded visit
                 # 2. Within the projection horizon (next 365 days)
-                # 3. Within max_cycles if defined
+                # 3. Within this row's [start_cycle, end_cycle] range
                 if visit_date.date() > last_visit_date.date() and visit_date.date() <= projection_horizon:
-                    # Check max_cycles constraint if defined
-                    if max_cycles is not None and current_cycle_number > max_cycles:
+                    # Gate by this row's cycle range
+                    if not in_range(current_cycle_number):
                         continue
 
                     recorded_forecast_str = f"{prefix}Cycle {current_cycle_number} Day {day}"
@@ -430,16 +458,21 @@ class VisitProjector:
             start_cycle_number = current_cycle_number + 1
 
             # Project cycles until we exceed the time horizon
-            # Loop stops when visit dates exceed projection_horizon OR max_cycles is reached
+            # Loop stops when visit dates exceed projection_horizon OR end_cycle is reached
             cycle_offset = 0
             while True:
                 # Calculate Day 1 of the current future forecast cycle
                 current_cycle_day_1 = cycle_day_1 + timedelta(days=cycle_offset * cycle_days)
                 current_projected_cycle = start_cycle_number + cycle_offset
 
-                # Check if we've exceeded max cycles (hard cap if defined)
-                if max_cycles is not None and current_projected_cycle > max_cycles:
+                # Hard cap: stop once past this row's end_cycle
+                if end_cycle is not None and current_projected_cycle > end_cycle:
                     break
+
+                # If we haven't entered this row's range yet, advance without emitting
+                if current_projected_cycle < start_cycle:
+                    cycle_offset += 1
+                    continue
 
                 # Check if the first day of this cycle exceeds our time horizon
                 # If so, we still need to check individual visit days in case some are within horizon
@@ -572,6 +605,22 @@ class DemandPlanningProcessor:
 
         df_mapping = df_mapping.copy()
 
+        # ========================================================================
+        # Derive start_cycle / end_cycle on staggered mapping rows
+        # (rows identical except for max_cycles and dispensing_quantity encode a
+        # cycle-range stagger; e.g. cycles 1-3 @ qty 2, cycles 4-13 @ qty 1)
+        # ========================================================================
+        stagger_group_cols = [c for c in df_mapping.columns if c not in ("max_cycles", "dispensing_quantity")]
+        df_mapping = df_mapping.sort_values(stagger_group_cols + ["max_cycles"], na_position="last").reset_index(drop=True)
+        df_mapping["end_cycle"] = df_mapping["max_cycles"]
+        df_mapping["start_cycle"] = (
+            df_mapping.groupby(stagger_group_cols, dropna=False)["max_cycles"]
+                      .shift(1)
+                      .add(1)
+                      .fillna(1)
+                      .astype(int)
+        )
+
         # Define base merge keys (without country)
         base_merge_keys = ["study_protocol", "randomized_treatment", "tpc", "subject_status"]
 
@@ -688,80 +737,80 @@ class DemandPlanningProcessor:
         logger.info(f"Total merged records: {len(df_merged)} "
                    f"({len(df_merged_country_specific)} country-specific + {len(df_merged_generic)} generic)")
 
-        # build country set (lowercase) from your existing list
-        country_list = df_mapping_country_specific['country'].dropna().unique().tolist()
-        country_set = {c.lower() for c in country_list}
+        if len(df_mapping_country_specific) > 0:
+            country_list = df_mapping_country_specific['country'].dropna().unique().tolist()
+            country_set = {c.lower() for c in country_list}
 
-        def extract_drug_base(val):
-            if val == 'nan':
-                return 'nan'  # preserve NaN
+            def extract_drug_base(val):
+                if val == 'nan':
+                    return 'nan'  # preserve NaN
 
-            s = str(val).strip()
+                s = str(val).strip()
 
-            # 1) Remove dosage and everything after the first digit
-            s = re.sub(r'\d.*', '', s).strip()
+                # 1) Remove dosage and everything after the first digit
+                s = re.sub(r'\d.*', '', s).strip()
 
-            # 2) Remove country names (case-insensitive) with optional hyphen
-            for c in country_set:
-                s = re.sub(rf'(?i)\b{re.escape(c)}\b-?', '', s)
-                s = re.sub(rf'(?i)-\b{re.escape(c)}\b', '', s)
+                # 2) Remove country names (case-insensitive) with optional hyphen
+                for c in country_set:
+                    s = re.sub(rf'(?i)\b{re.escape(c)}\b-?', '', s)
+                    s = re.sub(rf'(?i)-\b{re.escape(c)}\b', '', s)
 
-            # 3) Remove leftover brackets if any survived
-            s = re.sub(r'[\(\)]', '', s)
+                # 3) Remove leftover brackets if any survived
+                s = re.sub(r'[\(\)]', '', s)
 
-            # 4) Clean leading/trailing hyphens or extra spaces
-            s = re.sub(r'^[\s\-]+', '', s)
-            s = re.sub(r'[\s\-]+$', '', s)
-            s = re.sub(r'\s{2,}', ' ', s)
+                # 4) Clean leading/trailing hyphens or extra spaces
+                s = re.sub(r'^[\s\-]+', '', s)
+                s = re.sub(r'[\s\-]+$', '', s)
+                s = re.sub(r'\s{2,}', ' ', s)
 
-            return s.strip()
+                return s.strip()
 
-        df_mapping_country_specific['study_drug_dispensed_base'] = (
-            df_mapping_country_specific['study_drug_dispensed'].apply(extract_drug_base)
-        )
-
-        key_cols = [
-            'study_protocol_lower',
-            'randomized_treatment_lower',
-            'tpc_lower',
-            'subject_status_lower',
-            'country_lower',
-            'study_drug_dispensed_base'
-        ]
-
-        df_mapping_country_specific["key_col"] = (
-            df_mapping_country_specific[key_cols]
-            .astype(str)
-            .agg("+".join, axis=1)
-        )
-
-        country_specific_dispense_map = (
-            df_mapping_country_specific
-            .groupby("key_col")["study_drug_dispensed"]
-            .apply(list)
-            .to_dict()
-        )
-
-        df_merged['study_drug_dispensed_base'] = df_merged['study_drug_dispensed'].str.extract(r'^(.*?)\s\d', expand=False).fillna('nan')
-
-        df_merged["key_col"] = (
-            df_merged[key_cols]
-            .astype(str)
-            .agg("+".join, axis=1)
-        )
-
-        df_merged = df_merged[
-            df_merged.apply(
-                lambda row: (
-                                # If key does not exist → keep the row
-                                    row["key_col"] not in country_specific_dispense_map
-                            ) or (
-                                # If key exists → check if value is allowed
-                                    row["study_drug_dispensed"] in country_specific_dispense_map[row["key_col"]]
-                            ),
-                axis=1
+            df_mapping_country_specific['study_drug_dispensed_base'] = (
+                df_mapping_country_specific['study_drug_dispensed'].apply(extract_drug_base)
             )
-        ]
+
+            key_cols = [
+                'study_protocol_lower',
+                'randomized_treatment_lower',
+                'tpc_lower',
+                'subject_status_lower',
+                'country_lower',
+                'study_drug_dispensed_base'
+            ]
+
+            df_mapping_country_specific["key_col"] = (
+                df_mapping_country_specific[key_cols]
+                .astype(str)
+                .agg("+".join, axis=1)
+            )
+
+            country_specific_dispense_map = (
+                df_mapping_country_specific
+                .groupby("key_col")["study_drug_dispensed"]
+                .apply(list)
+                .to_dict()
+            )
+
+            df_merged['study_drug_dispensed_base'] = df_merged['study_drug_dispensed'].str.extract(r'^(.*?)\s\d', expand=False).fillna('nan')
+
+            df_merged["key_col"] = (
+                df_merged[key_cols]
+                .astype(str)
+                .agg("+".join, axis=1)
+            )
+
+            df_merged = df_merged[
+                df_merged.apply(
+                    lambda row: (
+                                    row["key_col"] not in country_specific_dispense_map
+                                ) or (
+                                    row["study_drug_dispensed"] in country_specific_dispense_map[row["key_col"]]
+                                ),
+                    axis=1
+                )
+            ]
+
+            df_merged.drop(columns=["key_col", "study_drug_dispensed_base"], inplace=True, errors='ignore')
 
         # Remove temporary columns (row identifier and lowercase columns)
         cols_to_drop = ['_temp_row_id']
@@ -797,11 +846,21 @@ class DemandPlanningProcessor:
         logger.info(f"Identified {len(df_result)} records with valid medicines")
 
         # Add parsed visit information for easier processing
-        df_result['parsed_last_visit_cycle'] = df_result['last_study_visit_recorded'].apply(
-            self.text_processor.parse_cycle_number
+        df_result['parsed_last_visit_cycle'] = df_result.apply(
+            lambda row: self.text_processor.parse_cycle_number(
+                row['last_study_visit_recorded'],
+                row.get('dispensing_frequency_days', 28),
+                row.get('visit_count_per_cycle', 1),
+            ),
+            axis=1,
         )
-        df_result['parsed_last_visit_day'] = df_result['last_study_visit_recorded'].apply(
-            self.text_processor.parse_cycle_day
+        df_result['parsed_last_visit_day'] = df_result.apply(
+            lambda row: self.text_processor.parse_cycle_day(
+                row['last_study_visit_recorded'],
+                row.get('dispensing_frequency_days', 28),
+                row.get('visit_count_per_cycle', 1),
+            ),
+            axis=1,
         )
 
         return df_result
@@ -819,7 +878,7 @@ class DemandPlanningProcessor:
         logger.info("Aggregating by patient and medicine")
 
         # Define aggregation
-        id_cols = ["study_protocol", "subject_number", "drug_dispensed"]
+        id_cols = ["study_protocol", "subject_number", "drug_dispensed", "start_cycle", "end_cycle"]
 
         # Columns to sum
         sum_cols = ["total_medicines_required_per_cycle"]
@@ -984,6 +1043,7 @@ class DemandPlanningProcessor:
                 raise ValueError("Either df_mapping or mapping_file must be provided")
             logger.info(f"Loading mapping data from file: {mapping_file}")
             df_mapping = self.data_loader.load_mapping_data(mapping_file)
+            df_mapping = df_mapping[df_mapping[['visit_days', 'dispensing_quantity', 'dispensing_frequency_days']].notna().all(axis=1)]
         else:
             logger.info(f"Using provided mapping DataFrame with {len(df_mapping)} records")
             # Make a copy to avoid modifying the original

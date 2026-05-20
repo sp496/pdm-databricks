@@ -48,7 +48,8 @@ class DataCurator:
                  site_mapping_df: Optional[pd.DataFrame] = None,
                  depot_mapping_df: Optional[pd.DataFrame] = None,
                  slsm_mapping_df: Optional[pd.DataFrame] = None,
-                 clsm_mapping_df: Optional[pd.DataFrame] = None):
+                 clsm_mapping_df: Optional[pd.DataFrame] = None,
+                 site_depot_mapping_df: Optional[pd.DataFrame] = None):
 
         """
         Initialize the DataCurator.
@@ -65,6 +66,7 @@ class DataCurator:
         self.depot_mapping_df = dedupe(depot_mapping_df)
         self.slsm_mapping_df = dedupe(slsm_mapping_df)
         self.clsm_mapping_df = dedupe(clsm_mapping_df)
+        self.site_depot_mapping_df = dedupe(site_depot_mapping_df)
 
         self.mapping_df_map = {
             'subject': self.subject_mapping_df,
@@ -283,18 +285,20 @@ class DataCurator:
         self,
         visit_df: pd.DataFrame,
         subject_df: pd.DataFrame,
-        site_depot_df: pd.DataFrame,
     ) -> pd.DataFrame:
         """
-        Assemble a unified subject-visit DataFrame from three source DataFrames.
+        Assemble a unified subject-visit DataFrame from two source DataFrames.
 
         Reduces visit_df to the latest visit per subject per drug, joins
         patient-level fields from subject_df, and maps sites to depots
-        via site_depot_df.
+        via self.site_depot_mapping_df.
 
         Returns:
             DataFrame with one row per subject per drug.
         """
+        if self.site_depot_mapping_df is None:
+            raise ValueError("site_depot_mapping_df must be provided to DataCurator for subject-visit assembly")
+        site_depot_df = self.site_depot_mapping_df
         visit_df = visit_df.copy()
         visit_df['Visit Date'] = pd.to_datetime(visit_df['Visit Date'], dayfirst=True, errors='coerce')
 
@@ -328,18 +332,20 @@ class DataCurator:
     def assemble_site_data(
         self,
         site_df: pd.DataFrame,
-        site_depot_df: pd.DataFrame,
     ) -> pd.DataFrame:
         """
-        Preprocess site inventory data from two source DataFrames.
+        Preprocess site inventory data.
 
-        1. Join site_depot_df to get Parent Depot and Country per site.
+        1. Join self.site_depot_mapping_df to get Parent Depot and Country per site.
         2. Drop rows missing site, quantity, or drug status; convert quantity to int.
         3. Pivot Drug Status into quantity columns — one output row per site/lot grain.
 
         Returns:
             Transformed DataFrame with one row per site/lot combination.
         """
+        if self.site_depot_mapping_df is None:
+            raise ValueError("site_depot_mapping_df must be provided to DataCurator for site assembly")
+        site_depot_df = self.site_depot_mapping_df
         status_mapping = {
             'In Transit': 'Quantity Study Drug - Requested',
             'Intact': 'Quantity Study Drug - Available',
@@ -405,18 +411,20 @@ class DataCurator:
     def assemble_depot_data(
         self,
         depot_df: pd.DataFrame,
-        site_depot_df: pd.DataFrame,
     ) -> pd.DataFrame:
         """
         Preprocess depot inventory data.
 
-        1. Join site_depot_df (deduplicated) to get Country per depot.
+        1. Join self.site_depot_mapping_df (deduplicated) to get Country per depot.
         2. Drop rows missing depot, quantity, or drug status; convert quantity to int.
         3. Pivot Drug Status into quantity columns — one output row per depot/lot grain.
 
         Returns:
             Transformed DataFrame with one row per depot/lot combination.
         """
+        if self.site_depot_mapping_df is None:
+            raise ValueError("site_depot_mapping_df must be provided to DataCurator for depot assembly")
+        site_depot_df = self.site_depot_mapping_df
         status_mapping = {
             'In Transit':  'Quantity Study Drug - Requested',
             'Intact':      'Quantity Study Drug - Available',
@@ -474,10 +482,28 @@ class DataCurator:
         logger.info(f"Assembled depot data: {result.shape[0]} rows, {result.shape[1]} columns")
         return result
 
-    def type_specific_processing(self, df: pd.DataFrame, file_type: str) -> pd.DataFrame:
+    def type_specific_processing(self, df: pd.DataFrame, file_type: str, study_protocol: str) -> pd.DataFrame:
         if file_type == 'subject':
             if 'Year of Birth' in df.columns:
                 df['Year of Birth'] = df['Year of Birth'].apply(self.extract_year)
+
+        if file_type == 'site':
+            if ('Parent Depot' in df.columns and df['Parent Depot'].isna().all()
+                    and self.site_depot_mapping_df is not None
+                    and 'Site ID' in df.columns
+                    and {'Study Number', 'Gilead Site', 'Depot'}.issubset(self.site_depot_mapping_df.columns)):
+                lookup = (
+                    self.site_depot_mapping_df.loc[
+                        self.site_depot_mapping_df['Study Number'] == study_protocol,
+                        ['Gilead Site', 'Depot'],
+                    ]
+                    .drop_duplicates(subset=['Gilead Site'])
+                )
+                original_cols = df.columns.tolist()
+                df = df.drop(columns=['Parent Depot']).merge(
+                    lookup, how='left', left_on='Site ID', right_on='Gilead Site'
+                ).rename(columns={'Depot': 'Parent Depot'}).drop(columns=['Gilead Site'], errors='ignore')
+                df = df[original_cols]
 
         if file_type == 'depot':
             if 'Country' in df.columns and ('Approved Countries' not in df.columns
@@ -600,7 +626,7 @@ class DataCurator:
             else:
                 standardized_df = df.copy()
 
-            standardized_df = self.type_specific_processing(standardized_df, file_type)
+            standardized_df = self.type_specific_processing(standardized_df, file_type, study_protocol)
 
             # Add Study Protocol column
             standardized_df.insert(0, 'Study Protocol', study_protocol)
