@@ -482,28 +482,57 @@ class DataCurator:
         logger.info(f"Assembled depot data: {result.shape[0]} rows, {result.shape[1]} columns")
         return result
 
+    def _fill_parent_depot_from_mapping(self, df: pd.DataFrame, study_protocol: str) -> pd.DataFrame:
+        """
+        Populate 'Parent Depot' on df by looking up the site-depot mapping.
+
+        Triggers when Parent Depot is missing entirely OR present but fully null.
+        Joins df.'Site ID' to mapping.'Gilead Site' (filtered to the given study).
+        Preserves original column order when Parent Depot already existed; otherwise
+        inserts the new column right after 'Site ID'.
+        """
+        if self.site_depot_mapping_df is None or 'Site ID' not in df.columns:
+            return df
+        if not {'Study Number', 'Gilead Site', 'Depot'}.issubset(self.site_depot_mapping_df.columns):
+            return df
+
+        had_column = 'Parent Depot' in df.columns
+        if had_column and not df['Parent Depot'].isna().all():
+            return df
+
+        lookup = (
+            self.site_depot_mapping_df.loc[
+                self.site_depot_mapping_df['Study Number'] == study_protocol,
+                ['Gilead Site', 'Depot'],
+            ]
+            .drop_duplicates(subset=['Gilead Site'])
+        )
+
+        original_cols = df.columns.tolist()
+        if had_column:
+            df = df.drop(columns=['Parent Depot'])
+        df = (
+            df.merge(lookup, how='left', left_on='Site ID', right_on='Gilead Site')
+              .rename(columns={'Depot': 'Parent Depot'})
+              .drop(columns=['Gilead Site'], errors='ignore')
+        )
+        if had_column:
+            df = df[original_cols]
+        else:
+            new_order = list(original_cols)
+            site_idx = new_order.index('Site ID')
+            new_order.insert(site_idx + 1, 'Parent Depot')
+            df = df[new_order]
+        return df
+
     def type_specific_processing(self, df: pd.DataFrame, file_type: str, study_protocol: str) -> pd.DataFrame:
         if file_type == 'subject':
             if 'Year of Birth' in df.columns:
                 df['Year of Birth'] = df['Year of Birth'].apply(self.extract_year)
+            df = self._fill_parent_depot_from_mapping(df, study_protocol)
 
         if file_type == 'site':
-            if ('Parent Depot' in df.columns and df['Parent Depot'].isna().all()
-                    and self.site_depot_mapping_df is not None
-                    and 'Site ID' in df.columns
-                    and {'Study Number', 'Gilead Site', 'Depot'}.issubset(self.site_depot_mapping_df.columns)):
-                lookup = (
-                    self.site_depot_mapping_df.loc[
-                        self.site_depot_mapping_df['Study Number'] == study_protocol,
-                        ['Gilead Site', 'Depot'],
-                    ]
-                    .drop_duplicates(subset=['Gilead Site'])
-                )
-                original_cols = df.columns.tolist()
-                df = df.drop(columns=['Parent Depot']).merge(
-                    lookup, how='left', left_on='Site ID', right_on='Gilead Site'
-                ).rename(columns={'Depot': 'Parent Depot'}).drop(columns=['Gilead Site'], errors='ignore')
-                df = df[original_cols]
+            df = self._fill_parent_depot_from_mapping(df, study_protocol)
 
         if file_type == 'depot':
             if 'Country' in df.columns and ('Approved Countries' not in df.columns

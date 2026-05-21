@@ -68,9 +68,9 @@ LOCAL_MAPPING = {
 # If subject_visit is set, subject is treated as the Subject Summary and assembly
 # is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
-    "subject":       None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Summary2026-05-06-15-33-02.xlsx",
+    "subject":       r"../fixtures/sample_csvs/Gilead GS-US-320-1092_Subject Summary (Unblinded)Subject Summary2026-05-19-13-26-14.csv",
     "depot":         None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
-    "site":          r"../fixtures/sample_csvs/Gilead GS-US-320-1092_Inventory Summary (Unblinded)Site Inventory Summary2026-05-19-13-25-53.csv",
+    "site":          None,#r"../fixtures/sample_csvs/Gilead GS-US-320-1092_Inventory Summary (Unblinded)Site Inventory Summary2026-05-19-13-25-53.csv",
     "slsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
     "clsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
     "subject_visit": None,#"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Visit Summary2026-05-06-15-33-02.xlsx",

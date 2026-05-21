@@ -102,7 +102,7 @@ string_cols = tgm_df_renamed.select_dtypes(include='object').columns
 tgm_df_renamed[string_cols] = tgm_df_renamed[string_cols].apply(lambda col: col.str.strip())
 
 # tgm_df_cleaned = tgm_df_renamed.dropna(subset=['visit_days', 'dispensing_quantity', 'dispensing_frequency_days'])
-tgm_df_cleaned = tgm_df_renamed.dropna(how='all')
+tgm_df_cleaned = tgm_df_renamed.dropna(how='all').drop_duplicates()
 
 # 🧱 Step 2: Convert pandas → Spark
 spark_tgm_df = spark.createDataFrame(tgm_df_cleaned)
