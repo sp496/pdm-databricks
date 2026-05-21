@@ -21,53 +21,46 @@ FROM
 WHERE 
     extract_date = (SELECT MAX(extract_date) FROM `pdm-pdm-gsc-bi-{env}`.`clinical_inventory`.`clinical_studylist_status`)
     AND study_protocol in (
-"CB8025-41837",
-"EDGE-Lung",
-"GS-US-174-0144",
-"GS-US-200-4625",
-"GS-US-200-6712",
-"GS-US-216-0128",
-"GS-US-320-1092",
-"GS-US-380-1474",
-"GS-US-380-5578",
-"GS-US-409-5704",
-"GS-US-412-2055",
-"GS-US-412-5624",
-"GS-US-457-6411",
-"GS-US-497-6486",
-"GS-US-521-6317",
-"GS-US-528-6020",
-"GS-US-528-6363",
-"GS-US-528-6727",
-"GS-US-528-9023",
-"GS-US-536-5939",
-"GS-US-544-5905-04_05",
-"GS-US-563-5925",
-"GS-US-563-5926",
-"GS-US-563-6041",
-"GS-US-567-6968",
-"GS-US-569-6172",
-"GS-US-570-6015",
-"GS-US-576-6220",
-"GS-US-576-7321",
-"GS-US-577-6153",
-"GS-US-579-6764",
-"GS-US-592-6173",
-"GS-US-592-6238",
-"GS-US-595-6184",
-"GS-US-598-6168",
-"GS-US-600-6165",
-"GS-US-621-6289",
-"GS-US-621-6290",
-"GS-US-621-6463",
-"GS-US-626-6216",
-"GS-US-666-6692",
-"GS-US-667-6882",
-"GS-US-682-6769",
-"GS-US-686-6854",
-"GS-US-699-7184",
-"GS-US-707-7297",
-"GS-US-712-7286"
+'GS-US-412-5624', -- 1
+'GS-US-521-6317', -- 2
+'GS-US-528-6020', -- 3
+'GS-US-528-6363', -- 4
+'GS-US-528-9023', -- 5
+'GS-US-563-5926', -- 6
+'GS-US-577-6153', -- 7
+'GS-US-592-6173', -- 8
+'GS-US-592-6238', -- 9
+'GS-US-595-6184', -- 10
+'GS-US-598-6168', -- 11
+'GS-US-600-6165', -- 12
+'GS-US-626-6216', -- 13
+'GS-US-200-6712', -- 14
+'GS-US-576-7321', -- 15
+'GS-US-569-6172', -- 16
+'GS-US-570-6015', -- 17
+'GS-US-576-6220', -- 18
+'GS-US-682-6769', -- 19
+'GS-US-579-6764', -- 20
+'GS-US-699-7184', -- 21
+'GS-US-707-7297', -- 22
+'GS-US-712-7286', -- 23
+'GS-US-567-6968', -- 24
+'GS-US-528-6727', -- 25
+'GS-US-563-5925', -- 26
+'GS-US-563-6041', -- 27
+'GS-US-621-6289', -- 28
+'GS-US-621-6290', -- 29
+'GS-US-200-4625', -- 30
+'GS-US-409-5704', -- 31
+'GS-US-667-6882', --32
+'GS-US-216-0128_A', --33
+'GS-US-457-6411', --34
+'GS-US-686-6854', --35
+'GS-US-536-5939', --36
+'GS-US-320-1092',
+'AFFIRM CB8025-41837',
+'GS-US-380-1474',
+'GS-US-621-6463'
 )
           """)
 df.display()
@@ -154,7 +147,7 @@ df = spark.sql(f"""
 WITH 
 depot AS (
     SELECT DISTINCT study_protocol
-    FROM `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_depot_inventory
+    FROM `pdm-pdm-gsc-bi-{env}`.clinical_inventory.clinical_depot_inventory
     WHERE
         extract_date = (
             SELECT MAX(extract_date)
@@ -164,7 +157,7 @@ depot AS (
 
 site AS (
     SELECT DISTINCT study_protocol
-    FROM `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_site_inventory
+    FROM `pdm-pdm-gsc-bi-{env}`.clinical_inventory.clinical_site_inventory
     WHERE
         extract_date = (
             SELECT MAX(extract_date)
@@ -174,7 +167,7 @@ site AS (
 
 subject AS (
     SELECT DISTINCT study_protocol
-    FROM `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_subject_summary
+    FROM `pdm-pdm-gsc-bi-{env}`.clinical_inventory.clinical_subject_summary
     WHERE
         extract_date = (
             SELECT MAX(extract_date)
@@ -184,7 +177,7 @@ subject AS (
 
 supply_site AS (
     SELECT DISTINCT study_protocol
-    FROM `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_supply_method_site_level
+    FROM `pdm-pdm-gsc-bi-{env}`.clinical_inventory.clinical_supply_method_site_level
     WHERE
         extract_date = (
             SELECT MAX(extract_date)
@@ -194,7 +187,7 @@ supply_site AS (
 
 supply_country AS (
     SELECT DISTINCT study_protocol
-    FROM `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_supply_method_country_level
+    FROM `pdm-pdm-gsc-bi-{env}`.clinical_inventory.clinical_supply_method_country_level
     WHERE
         extract_date = (
             SELECT MAX(extract_date)
@@ -204,7 +197,7 @@ supply_country AS (
 
 demand AS (
     SELECT DISTINCT study_name
-    FROM `pdm-pdm-gsc-bi-dev`.clinical_inventory.clinical_demand_plan
+    FROM `pdm-pdm-gsc-bi-{env}`.clinical_inventory.clinical_demand_plan
 )
 
 SELECT
@@ -231,53 +224,50 @@ FULL OUTER JOIN supply_country sc
 
 FULL OUTER JOIN demand dem
     ON COALESCE(d.study_protocol, s.study_protocol, sub.study_protocol, ss.study_protocol, sc.study_protocol) = dem.study_name
--- WHERE
---    sub.study_protocol in  ( 
---                         -- "GS-US-412-5624",
---                         -- "GS-US-521-6317",
---                         -- "GS-US-528-6020",
---                         -- "GS-US-528-6363",
---                         -- "GS-US-528-9023",
---                         -- "GS-US-563-5926",
---                         -- "GS-US-577-6153",
---                         -- "GS-US-592-6173",
---                         -- "GS-US-592-6238",
---                         -- "GS-US-595-6184",
---                         -- "GS-US-598-6168",
---                         -- "GS-US-600-6165",
---                         -- "GS-US-626-6216",
---                         -- "GS-US-682-6769",
---                         -- "GS-US-200-6712",
---                         -- "GS-US-570-6015",
---                         -- "GS-US-569-6172",
---                         -- "GS-US-576-6220",
---                         -- "GS-US-576-7321",
---                         -- 'GS-US-567-6968',
---                         -- 'GS-US-579-6764',
---                         -- 'GS-US-699-7184',
---                         -- 'GS-US-707-7297',
---                         -- 'GS-US-712-7286'
+WHERE
+   sub.study_protocol in  ( 
+'GS-US-412-5624', -- 1
+'GS-US-521-6317', -- 2
+'GS-US-528-6020', -- 3
+'GS-US-528-6363', -- 4
+'GS-US-528-9023', -- 5
+'GS-US-563-5926', -- 6
+'GS-US-577-6153', -- 7
+'GS-US-592-6173', -- 8
+'GS-US-592-6238', -- 9
+'GS-US-595-6184', -- 10
+'GS-US-598-6168', -- 11
+'GS-US-600-6165', -- 12
+'GS-US-626-6216', -- 13
+'GS-US-200-6712', -- 14
+'GS-US-576-7321', -- 15
+'GS-US-569-6172', -- 16
+'GS-US-570-6015', -- 17
+'GS-US-576-6220', -- 18
+'GS-US-682-6769', -- 19
+'GS-US-579-6764', -- 20
+'GS-US-699-7184', -- 21
+'GS-US-707-7297', -- 22
+'GS-US-712-7286', -- 23
+'GS-US-567-6968', -- 24
+'GS-US-528-6727', -- 25
+'GS-US-563-5925', -- 26
+'GS-US-563-6041', -- 27
+'GS-US-621-6289', -- 28
+'GS-US-621-6290', -- 29
 
---                         -- 'GS-US-174-0144',
---                         'GS-US-200-4625',
---                         -- 'GS-US-216-0128_A',
---                         'GS-US-380-1474',
---                         'GS-US-380-5578',
---                         'GS-US-409-5704',
---                         'GS-US-412-2055',
---                         -- 'GS-US-457-6411',
---                         'GS-US-528-6727',
---                         -- 'GS-US-536-5939',
---                         'GS-US-544-5905-04_05',
---                         'GS-US-563-5925',
---                         'GS-US-563-6041',
---                         -- 'GS-US-621-6463',
---                         'GS-US-621-6289',
---                         'GS-US-621-6290',
---                         'GS-US-666-6692',
---                         'GS-US-667-6882',
---                         'GS-US-686-6854'
---                     )
+'GS-US-200-4625', -- 30
+'GS-US-409-5704', -- 31
+'GS-US-667-6882', --32
+'GS-US-216-0128_A', --33
+'GS-US-457-6411', --34
+'GS-US-686-6854', --35
+'GS-US-536-5939', --36
+'GS-US-320-1092',
+'AFFIRM CB8025-41837',
+'GS-US-380-1474',
+'GS-US-621-6463'
+                    )
 
 ORDER BY
     COALESCE(
