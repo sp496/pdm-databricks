@@ -110,7 +110,6 @@ CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`sap_rep
     `Reporting_Unit_of_Measure_Quantity`              STRING,
     `Standard_Extended_Cost`                          STRING,
     `Group_Valuation_Standard_Cost`                   DOUBLE,
-    `Gilead_Receipts`                                 STRING,
     `Segment`                                         STRING,
     `Year`                                            STRING,
     `Quarter`                                         STRING
@@ -178,7 +177,6 @@ CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`reconci
     `3PL_Material_Code`                   STRING,
     `3PL_Material_Type`                   STRING,
     `Line_item_variance_threshold_amount` INTEGER,
-    `Gilead_Receipts`                     STRING,
     `File_Name`                           STRING,
     `Date_Processed`                      STRING,
     `Has_Error`                           BOOLEAN,

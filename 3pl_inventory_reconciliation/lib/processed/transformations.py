@@ -19,7 +19,6 @@ _SAP_INPUT_COLUMNS = [
     "Stock_Quantity__Base_UOM_",
     "Base_UOM",
     "Batch_Number",
-    "Gilead_Receipts",  # enriched at curated write time via match_gilead_receipts
 ]
 
 _OUTPUT_COLUMNS = [
@@ -45,7 +44,6 @@ _OUTPUT_COLUMNS = [
     "3PL_Material_Code",
     "3PL_Material_Type",
     "Line_item_variance_threshold_amount",
-    "Gilead_Receipts",
     "File_Name",
     "Year",
     "Quarter",
@@ -71,8 +69,6 @@ def process_commercial(
 
     Performs an outer join on (plant, material, batch), enriches with material
     descriptions, plant classification, and derived columns.
-    Gilead_Receipts is expected to be pre-populated in sap_df (written at curated
-    time by write_mapping_tables via match_gilead_receipts).
     year and quarter are passed in explicitly (resolved by the notebook via
     resolve_quarter before loading) and stamped onto the output directly.
     Returns a pandas DataFrame ready for Spark conversion in the notebook.

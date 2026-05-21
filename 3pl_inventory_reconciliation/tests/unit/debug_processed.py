@@ -16,8 +16,6 @@ Input fixtures expected in tests/fixtures/processed/
 
   curated_commercial.csv      — curated_3pl_inventory filtered to Segment=commercial
   sap_report_commercial.csv   — sap_report filtered to Segment=commercial
-                                Must already contain Gilead_Receipts column
-                                (written by write_mapping_tables).
   header_mapping_commercial.csv — header_mapping filtered to Segment=commercial
 
 Additional fallback file (segment-independent):
@@ -149,8 +147,7 @@ def main():
     logger.info(f"  curated       : {curated_df.shape}  "
                 f"(Material_Description present: {'Material_Description' in curated_df.columns})")
     logger.info(f"  sap_report    : {sap_df.shape}  "
-                f"(Gilead_Receipts present: {'Gilead_Receipts' in sap_df.columns}, "
-                f"Material_Description present: {'Material_Description' in sap_df.columns})")
+                f"(Material_Description present: {'Material_Description' in sap_df.columns})")
     logger.info(f"  header_mapping: {header_mapping_df.shape}")
     print()
 

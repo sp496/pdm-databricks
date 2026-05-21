@@ -24,9 +24,6 @@ Fallback files expected in tests/fixtures/curated/
   material_type.csv
   sap_report.csv
 
-  Note: gilead_receipts is intentionally excluded — it is loaded only in
-  write_mapping_tables (not in the curated processing cache).
-
 Mapping Excel files (already in tests/fixtures/):
   api_mapping_2026_Q1.xlsx
   dp_mapping_2026_Q1.xlsx
@@ -80,7 +77,6 @@ REF_PATHS = RefFilePaths(
     uom_master_file_path           = os.path.join(_CURATED_DIR, "uom_master.csv"),
     unit_cost_file_path            = os.path.join(_CURATED_DIR, "unit_cost.csv"),
     material_type_file_path        = os.path.join(_CURATED_DIR, "material_type.csv"),
-    # gil_receipts_file_path intentionally omitted — loaded only in write_mapping_tables
 )
 
 

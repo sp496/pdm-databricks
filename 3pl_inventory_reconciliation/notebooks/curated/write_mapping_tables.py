@@ -26,7 +26,7 @@ sys.path.extend([project_root, repo_root])
 import pandas as pd
 
 from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_files
-from lib.curated.transformations import match_gilead_receipts, remove_decimal_if_all_zeros
+from lib.curated.transformations import remove_decimal_if_all_zeros
 from lib.discovery import discover_mapping_files, discover_sap_file
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
@@ -178,10 +178,7 @@ for segment in segments:
             sap_report_file_path      = dbfs_path(sap_report_path) if sap_report_path else None,
         )
 
-        # Only request what's needed for SAP enrichment at write time
-        ref_paths = RefFilePaths(
-            gil_receipts_file_path = dbfs_path(f"{ref_base}/gilead_receipts.csv"),
-        )
+        ref_paths = RefFilePaths()
 
         cache = load_mapping_files(
             file_paths       = file_paths,
@@ -208,11 +205,6 @@ for segment in segments:
 
     if cache.sap_report_df is not None:
         sap_df = cache.sap_report_df.copy()
-        if cache.gil_receipts_df is not None:
-            sap_df = match_gilead_receipts(sap_df, cache.gil_receipts_df)
-            print(f"  sap_report: Gilead_Receipts enrichment applied")
-        else:
-            print(f"  sap_report: Gilead receipts not available — Gilead_Receipts will be null")
         sap_df["Batch_Number"]                  = sap_df["Batch_Number"].apply(remove_decimal_if_all_zeros)
         sap_df["Stock_Quantity__Base_UOM_"]     = pd.to_numeric(sap_df["Stock_Quantity__Base_UOM_"],     errors="coerce")
         sap_df["Group_Valuation_Standard_Cost"] = pd.to_numeric(sap_df["Group_Valuation_Standard_Cost"], errors="coerce")

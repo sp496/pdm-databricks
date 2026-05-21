@@ -35,8 +35,6 @@ Fallback CSV files expected in tests/fixtures/curated/
   lot_no_mapping.csv        material_description.csv  uom_master.csv
   unit_cost.csv             material_type.csv
 
-  Note: gilead_receipts is intentionally excluded — it is loaded only in
-  write_mapping_tables and stored in the sap_report Delta table.
 """
 
 import os
@@ -91,7 +89,6 @@ REF_PATHS = RefFilePaths(
     uom_master_file_path           = os.path.join(_CURATED_DIR, "uom_master.csv"),
     unit_cost_file_path            = os.path.join(_CURATED_DIR, "unit_cost.csv"),
     material_type_file_path        = os.path.join(_CURATED_DIR, "material_type.csv"),
-    # gil_receipts_file_path intentionally omitted — loaded only in write_mapping_tables
 )
 
 # Root of the raw fixture tree — CSVs live at:

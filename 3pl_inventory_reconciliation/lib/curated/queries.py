@@ -140,58 +140,6 @@ def get_queries(q_end_date: str, data_source: str = "spark") -> Dict[str, str]:
                 curr_flag='V'
         """).strip(),
 
-        'gilead_receipts': dedent("""
-            SELECT
-                plant,
-                material,
-                batch,
-                SUM(qty_movement) qty,
-                uom,
-                MIN(posting_date) min_posting_date,
-                MAX(posting_date) max_posting_date
-            FROM (
-                WITH cte_mara AS (
-                    SELECT
-                        matnr,
-                        MAX(laeda) laeda
-                    FROM
-                        pdm_raw_saphana_ptd.default_s4h_hana_mara
-                    GROUP BY matnr
-                )
-                SELECT
-                    matdoc.werks plant,
-                    t001w.name1 plant_name,
-                    matdoc.zeile item,
-                    matdoc.matnr material,
-                    makt.maktx material_description,
-                    mara.extwg material_type,
-                    matdoc.bwart movement,
-                    t156ht.btext movement_description,
-                    matdoc.mblnr material_document,
-                    matdoc.charg batch,
-                    matdoc.shkzg stock_change,
-                    matdoc.menge qty_in_unit_of_entry,
-                    (CASE WHEN (matdoc.shkzg = 'H') THEN (matdoc.menge * -1) ELSE matdoc.menge END) qty_movement,
-                    matdoc.meins uom,
-                    matdoc.budat posting_date
-                FROM
-                    (((((pdm_raw_saphana_ptd.default_s4h_hana_matdoc matdoc
-                    INNER JOIN pdm_raw_saphana_ptd.default_s4h_hana_mara mara ON (matdoc.matnr = mara.matnr))
-                    INNER JOIN cte_mara ON ((mara.matnr = cte_mara.matnr) AND (mara.laeda = cte_mara.laeda) AND (mara.curr_flag = 'V')))
-                    LEFT JOIN pdm_raw_saphana_ptd.default_s4h_hana_t001w t001w ON ((matdoc.werks = t001w.werks) AND (t001w.curr_flag = 'V')))
-                    LEFT JOIN pdm_raw_saphana_ptd.default_s4h_hana_t156ht t156ht ON ((matdoc.bwart = t156ht.bwart) AND (t156ht.spras = 'E')))
-                    LEFT JOIN pdm_raw_saphana_ptd.default_s4h_hana_makt makt ON ((matdoc.matnr = makt.matnr) AND (makt.spras = 'E') AND (makt.curr_flag = 'V')))
-                WHERE
-                    (matdoc.matnr IS NOT NULL)
-                    AND (
-                        matdoc.bwart IN ('101','102','107','109','110','501','502','503','504','505','506',
-                                         '561','562','601','602','701','702','703','704','707','708',
-                                         '711','712','713','714','715','716','717','718','901','902')
-                        OR ((matdoc.bwart = '68C') AND (matdoc.shkzg = 'S'))
-                    )
-            )
-            GROUP BY plant, material, batch, uom
-        """).strip(),
     }
 
     return queries

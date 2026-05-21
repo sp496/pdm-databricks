@@ -121,8 +121,6 @@ ref_paths = RefFilePaths(
     uom_master_file_path           = dbfs_path(f"{ref_base}/uom_master.csv"),
     unit_cost_file_path            = dbfs_path(f"{ref_base}/unit_cost.csv"),
     material_type_file_path        = dbfs_path(f"{ref_base}/material_type.csv"),
-    # gil_receipts_file_path intentionally omitted — loaded in write_mapping_tables
-    # and stored in the sap_report Delta table as Gilead_Receipts
 )
 
 # COMMAND ----------

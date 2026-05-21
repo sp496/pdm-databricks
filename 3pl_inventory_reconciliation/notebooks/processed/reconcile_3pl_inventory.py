@@ -79,8 +79,8 @@ if run_mode == "historical":
 
 # COMMAND ----------
 
-# All SAP enrichments (Gilead_Receipts, Material_Description, Batch_Number normalisation,
-# numeric casts) are pre-applied in write_mapping_tables before writing to sap_report.
+# All SAP enrichments (Material_Description, Batch_Number normalisation, numeric casts)
+# are pre-applied in write_mapping_tables before writing to sap_report.
 # Curated data carries Material_Description from the curated pipeline.
 # No static reference files needed here.
 
@@ -165,7 +165,6 @@ def finalise_and_write(combined_df: pd.DataFrame, target_table: str, segment: st
         col("3PL_Material_Code").cast(StringType()),
         col("3PL_Material_Type").cast(StringType()),
         col("Line_item_variance_threshold_amount").cast(IntegerType()),
-        col("Gilead_Receipts").cast(StringType()),
         col("File_Name").cast(StringType()),
         col("Date_Processed").cast(StringType()),
         col("Has_Error").cast(BooleanType()),

@@ -27,7 +27,6 @@ _SAP_INPUT_COLUMNS = [
     "Stock_Quantity__Base_UOM_",
     "Base_UOM",
     "Batch_Number",
-    "Gilead_Receipts",
 ]
 
 _OUTPUT_COLUMNS = [
@@ -53,7 +52,6 @@ _OUTPUT_COLUMNS = [
     "3PL_Material_Code",
     "3PL_Material_Type",
     "Line_item_variance_threshold_amount",
-    "Gilead_Receipts",
     "File_Name",
     "Year",
     "Quarter",
@@ -151,7 +149,6 @@ def process_commercial_spark(
         F.col("sap.Stock_Quantity__Base_UOM_").alias("Stock_OH"),
         F.col("sap.Base_UOM").alias("UOM"),
         F.col("sap.Batch_Number").alias("Batch_Number"),
-        F.col("sap.Gilead_Receipts").alias("Gilead_Receipts"),
 
         # --- Curated-sourced columns ---
         F.col("cur.Gilead_Material_Code").alias("Gilead_Material_Code"),
@@ -272,7 +269,6 @@ def process_commercial_spark(
         "3PL_Material_Code",
         "3PL_Material_Type",
         "Line_item_variance_threshold_amount",
-        "Gilead_Receipts",
         "File_Name",
         "Year",
         "Quarter",

@@ -45,7 +45,6 @@ class RefFilePaths:
     uom_master_file_path:           Optional[str] = None
     unit_cost_file_path:            Optional[str] = None
     material_type_file_path:        Optional[str] = None
-    gil_receipts_file_path:         Optional[str] = None
 
 
 class MappingDataCache:
@@ -67,7 +66,6 @@ class MappingDataCache:
         self.unit_cost_df = None
         self.material_type_df = None
         self.material_description_df = None
-        self.gil_receipts_df = None
 
 
 def _load_excel_sheet(file_path: str, sheet_name: str) -> pd.DataFrame:
@@ -303,12 +301,6 @@ def load_mapping_files(
         cache.material_type_df = _coerce_string_columns(backend.load(
             'material_type', queries['material_type'],
             ref_paths.material_type_file_path, pd.read_csv, dtype=str))
-
-    if ref_paths.gil_receipts_file_path is not None:
-        print("\tLoading Gilead receipts...")
-        cache.gil_receipts_df = _coerce_string_columns(backend.load(
-            'gilead_receipts', queries['gilead_receipts'],
-            ref_paths.gil_receipts_file_path, pd.read_csv, dtype=str))
 
     print("Live-query datasets loaded successfully!")
     return cache

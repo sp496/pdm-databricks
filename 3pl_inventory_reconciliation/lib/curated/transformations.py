@@ -455,26 +455,3 @@ def enrich_material_description(df: pd.DataFrame, material_description_df: pd.Da
     return df.drop(columns=["matnr"])
 
 
-# ---------------------------------------------------------------------------
-# SAP enrichment (used at curated write time)
-# ---------------------------------------------------------------------------
-
-def match_gilead_receipts(sap_df: pd.DataFrame, gil_receipts_df: pd.DataFrame) -> pd.DataFrame:
-    """Left-join Gilead receipt quantities onto the SAP report rows.
-
-    The SAP report is expected to have Delta-table column names (underscores).
-    gil_receipts_df columns: plant, material, batch, qty
-    """
-    gil_receipts_df = (
-        gil_receipts_df
-        .rename(columns={"qty": "Gilead_Receipts", "plant": "Plant_Receipts"})
-        .dropna(subset=["Plant_Receipts", "material", "batch"])
-        .astype(str)
-    )
-    sap_df = sap_df.merge(
-        gil_receipts_df[["Plant_Receipts", "material", "batch", "Gilead_Receipts"]],
-        how="left",
-        left_on=["Plant", "Material_Number", "Batch_Number"],
-        right_on=["Plant_Receipts", "material", "batch"],
-    )
-    return sap_df.drop(columns=["Plant_Receipts", "material", "batch"])
