@@ -23,7 +23,7 @@ sys.path.extend([project_root, repo_root])
 # COMMAND ----------
 
 from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_files, load_file_mappings
-from lib.discovery import discover_mapping_files, discover_sap_file, get_latest_completed_quarter
+from lib.discovery import discover_mapping_file, discover_sap_file, get_latest_completed_quarter
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
 
@@ -85,12 +85,12 @@ print(f"Raw quarter root : {raw_quarter_root}")
 
 # COMMAND ----------
 
-# Mapping Excel files — discovered from the landing zone (source bucket)
-mapping_paths = discover_mapping_files(dbutils, src_quarter_root)
-print(f"Discovered mapping files: {mapping_paths}")
+# Mapping Excel file — discovered from the landing zone (source bucket)
+mapping_path = discover_mapping_file(dbutils, src_quarter_root)
+print(f"Discovered mapping file: {mapping_path}")
 
-if not mapping_paths.get("api") or not mapping_paths.get("dp"):
-    raise FileNotFoundError(f"Could not find api/dp mapping files under {src_quarter_root}/mapping_files")
+if not mapping_path:
+    raise FileNotFoundError(f"Could not find mapping file under {src_quarter_root}/mapping_files")
 
 # SAP report — processed CSV from the raw layer
 sap_report_path = discover_sap_file(dbutils, raw_quarter_root)
@@ -104,24 +104,37 @@ ref_base = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['ref_data_dir']}
 print(f"Reference base: {ref_base}")
 
 file_paths = MappingFilePaths(
-    api_mapping_file_path     = dbfs_path(mapping_paths["api"]),
-    dp_mapping_file_path      = dbfs_path(mapping_paths["dp"]),
+    mapping_file_path         = dbfs_path(mapping_path),
     header_mapping_sheet_name = "Header Mapping",
     item_mapping_sheet_name   = "Item Mapping",
     uom_mapping_sheet_name    = "UOM Mapping",
     sap_report_file_path      = dbfs_path(sap_report_path) if sap_report_path else None,
 )
 
-ref_paths = RefFilePaths(
-    plant_name_mapping_file_path   = dbfs_path(f"{ref_base}/plant_name_mapping.csv"),
-    material_master_file_path      = dbfs_path(f"{ref_base}/material_master.csv"),
-    lot_no_master_file_path        = dbfs_path(f"{ref_base}/lot_no_master.csv"),
-    lot_no_mapping_file_path       = dbfs_path(f"{ref_base}/lot_no_mapping.csv"),
-    material_description_file_path = dbfs_path(f"{ref_base}/material_description.csv"),
-    uom_master_file_path           = dbfs_path(f"{ref_base}/uom_master.csv"),
-    unit_cost_file_path            = dbfs_path(f"{ref_base}/unit_cost.csv"),
-    material_type_file_path        = dbfs_path(f"{ref_base}/material_type.csv"),
-)
+# Clinical pulls EBS-sourced datasets (no unit cost) and uses clinical_-prefixed
+# fallback names so they don't collide with the SAP-shaped commercial CSVs.
+if segment == "clinical":
+    ref_paths = RefFilePaths(
+        plant_name_mapping_file_path   = dbfs_path(f"{ref_base}/clinical_plant_name_mapping.csv"),
+        material_master_file_path      = dbfs_path(f"{ref_base}/clinical_material_master.csv"),
+        lot_no_master_file_path        = dbfs_path(f"{ref_base}/clinical_lot_no_master.csv"),
+        lot_no_mapping_file_path       = dbfs_path(f"{ref_base}/clinical_lot_no_mapping.csv"),
+        material_description_file_path = dbfs_path(f"{ref_base}/clinical_material_description.csv"),
+        uom_master_file_path           = dbfs_path(f"{ref_base}/clinical_uom_master.csv"),
+        material_type_file_path        = dbfs_path(f"{ref_base}/clinical_material_type.csv"),
+        unit_cost_file_path            = None,  # no EBS cost source — Cost stays null
+    )
+else:
+    ref_paths = RefFilePaths(
+        plant_name_mapping_file_path   = dbfs_path(f"{ref_base}/plant_name_mapping.csv"),
+        material_master_file_path      = dbfs_path(f"{ref_base}/material_master.csv"),
+        lot_no_master_file_path        = dbfs_path(f"{ref_base}/lot_no_master.csv"),
+        lot_no_mapping_file_path       = dbfs_path(f"{ref_base}/lot_no_mapping.csv"),
+        material_description_file_path = dbfs_path(f"{ref_base}/material_description.csv"),
+        uom_master_file_path           = dbfs_path(f"{ref_base}/uom_master.csv"),
+        unit_cost_file_path            = dbfs_path(f"{ref_base}/unit_cost.csv"),
+        material_type_file_path        = dbfs_path(f"{ref_base}/material_type.csv"),
+    )
 
 # COMMAND ----------
 
@@ -134,7 +147,6 @@ file_cache = load_file_mappings(file_paths)
 
 print("\n--- File mapping summary ---")
 print(f"  header_mapping  : {file_cache.header_mapping_df.shape if file_cache.header_mapping_df is not None else 'None'}")
-print(f"  pl_type_mapping : {file_cache.pl_type_mapping_df.shape if file_cache.pl_type_mapping_df is not None else 'None'}")
 print(f"  item_mapping    : {file_cache.item_mapping_df.shape if file_cache.item_mapping_df is not None else 'None'}")
 print(f"  uom_mapping     : {file_cache.uom_mapping_df.shape if file_cache.uom_mapping_df is not None else 'None'}")
 print(f"  sap_report      : {file_cache.sap_report_df.shape if file_cache.sap_report_df is not None else 'None'}")
@@ -163,6 +175,7 @@ cache = load_mapping_files(
     quarter          = quarter,
     data_source      = data_source,
     starburst_config = starburst_config,
+    segment          = segment,
 )
 
 # COMMAND ----------
@@ -174,7 +187,6 @@ cache = load_mapping_files(
 
 fields = {
     "header_mapping"       : cache.header_mapping_df,
-    "pl_type_mapping"      : cache.pl_type_mapping_df,
     "item_mapping"         : cache.item_mapping_df,
     "uom_mapping"          : cache.uom_mapping_df,
     "sap_report"           : cache.sap_report_df,

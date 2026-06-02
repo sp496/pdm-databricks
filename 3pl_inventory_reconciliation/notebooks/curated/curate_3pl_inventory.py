@@ -35,7 +35,7 @@ from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_
 from lib.curated.transformations import curated_processing
 from lib.discovery import (
     get_latest_completed_quarter,
-    discover_mapping_files,
+    discover_mapping_file,
     discover_all_raw_csvs,
 )
 from common.config_loader import load_config
@@ -119,14 +119,18 @@ for segment in segments:
     segment_src_root = f"{src_root}/{segment}"
 
     # ------------------------------------------------------------------
-    # Resolve quarter — detected from raw layer output
+    # Resolve quarter — detected from the SOURCE landing (the authoritative
+    # "which quarter are we on"). The raw layer is still read for the actual
+    # CSV data below, but quarter detection no longer scans it — keeping all
+    # curated-layer notebooks consistent (write_mapping_tables and
+    # write_inventory_tables also detect from source).
     # ------------------------------------------------------------------
     if run_mode == "historical":
         print(f"  Using historical: year={year}, quarter={quarter}")
     else:
-        year, quarter = get_latest_completed_quarter(dbutils, segment_raw_root)
+        year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
         if not year or not quarter:
-            print(f"  No completed quarter found under {segment_raw_root} — skipping segment")
+            print(f"  No completed quarter found under {segment_src_root} — skipping segment")
             continue
         print(f"  Auto-detected latest completed quarter: year={year}, quarter={quarter}")
 
@@ -134,36 +138,50 @@ for segment in segments:
     raw_quarter_root = f"{segment_raw_root}/{year}/{quarter}"
 
     # ------------------------------------------------------------------
-    # Discover mapping and SAP files
+    # Discover mapping file
     # ------------------------------------------------------------------
-    mapping_paths = discover_mapping_files(dbutils, src_quarter_root)
-    print(f"Mapping files: {mapping_paths}")
+    mapping_path = discover_mapping_file(dbutils, src_quarter_root)
+    print(f"Mapping file: {mapping_path}")
 
-    if not mapping_paths.get("api") or not mapping_paths.get("dp"):
-        print(f"  Could not find api/dp mapping files under {src_quarter_root}/mapping_files — skipping segment")
+    if not mapping_path:
+        print(f"  Could not find mapping file under {src_quarter_root}/mapping_files — skipping segment")
         continue
 
     # ------------------------------------------------------------------
     # Build mapping file paths and load cache
     # ------------------------------------------------------------------
     file_paths = MappingFilePaths(
-        api_mapping_file_path     = dbfs_path(mapping_paths["api"]),
-        dp_mapping_file_path      = dbfs_path(mapping_paths["dp"]),
-        header_mapping_sheet_name="Header Mapping",
-        item_mapping_sheet_name="Item Mapping",
-        uom_mapping_sheet_name="UOM Mapping",
+        mapping_file_path         = dbfs_path(mapping_path),
+        header_mapping_sheet_name = "Header Mapping",
+        item_mapping_sheet_name   = "Item Mapping",
+        uom_mapping_sheet_name    = "UOM Mapping",
     )
 
-    ref_paths = RefFilePaths(
-        plant_name_mapping_file_path   = dbfs_path(f"{ref_base}/plant_name_mapping.csv"),
-        material_master_file_path      = dbfs_path(f"{ref_base}/material_master.csv"),
-        lot_no_master_file_path        = dbfs_path(f"{ref_base}/lot_no_master.csv"),
-        lot_no_mapping_file_path       = dbfs_path(f"{ref_base}/lot_no_mapping.csv"),
-        material_description_file_path = dbfs_path(f"{ref_base}/material_description.csv"),
-        uom_master_file_path           = dbfs_path(f"{ref_base}/uom_master.csv"),
-        unit_cost_file_path            = dbfs_path(f"{ref_base}/unit_cost.csv"),
-        material_type_file_path        = dbfs_path(f"{ref_base}/material_type.csv"),
-    )
+    # Reference-data fallback CSVs. Clinical pulls EBS-sourced datasets (no
+    # unit cost) and uses clinical_-prefixed fallback names so they don't
+    # collide with the SAP-shaped commercial CSVs.
+    if segment == "clinical":
+        ref_paths = RefFilePaths(
+            plant_name_mapping_file_path   = dbfs_path(f"{ref_base}/clinical_plant_name_mapping.csv"),
+            material_master_file_path      = dbfs_path(f"{ref_base}/clinical_material_master.csv"),
+            lot_no_master_file_path        = dbfs_path(f"{ref_base}/clinical_lot_no_master.csv"),
+            lot_no_mapping_file_path       = dbfs_path(f"{ref_base}/clinical_lot_no_mapping.csv"),
+            material_description_file_path = dbfs_path(f"{ref_base}/clinical_material_description.csv"),
+            uom_master_file_path           = dbfs_path(f"{ref_base}/clinical_uom_master.csv"),
+            material_type_file_path        = dbfs_path(f"{ref_base}/clinical_material_type.csv"),
+            unit_cost_file_path            = None,  # no EBS cost source — Cost stays null
+        )
+    else:
+        ref_paths = RefFilePaths(
+            plant_name_mapping_file_path   = dbfs_path(f"{ref_base}/plant_name_mapping.csv"),
+            material_master_file_path      = dbfs_path(f"{ref_base}/material_master.csv"),
+            lot_no_master_file_path        = dbfs_path(f"{ref_base}/lot_no_master.csv"),
+            lot_no_mapping_file_path       = dbfs_path(f"{ref_base}/lot_no_mapping.csv"),
+            material_description_file_path = dbfs_path(f"{ref_base}/material_description.csv"),
+            uom_master_file_path           = dbfs_path(f"{ref_base}/uom_master.csv"),
+            unit_cost_file_path            = dbfs_path(f"{ref_base}/unit_cost.csv"),
+            material_type_file_path        = dbfs_path(f"{ref_base}/material_type.csv"),
+        )
 
     mapping_cache  = load_mapping_files(
         file_paths       = file_paths,
@@ -172,11 +190,16 @@ for segment in segments:
         quarter          = quarter,
         data_source      = data_source,
         starburst_config = starburst_config,
+        segment          = segment,
     )
     print(f"Header mapping built — {len(mapping_cache.header_mapping)} site/sheet key(s): {sorted(mapping_cache.header_mapping.keys())}")
 
     # ------------------------------------------------------------------
     # Discover and process raw CSV files
+    # NOTE: the curated layer genuinely consumes the raw layer's output here
+    # — these are the cleaned per-site CSVs produced by ingest_3pl_inventory.
+    # This raw dependency is intentional and cannot move to source (source
+    # only holds the original xlsx, not curation-ready CSVs).
     # ------------------------------------------------------------------
     raw_files_by_site = discover_all_raw_csvs(dbutils, raw_quarter_root)
     total_files = sum(len(v) for v in raw_files_by_site.values())

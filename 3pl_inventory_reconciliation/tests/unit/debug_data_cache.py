@@ -24,9 +24,8 @@ Fallback files expected in tests/fixtures/curated/
   material_type.csv
   sap_report.csv
 
-Mapping Excel files (already in tests/fixtures/):
-  api_mapping_2026_Q1.xlsx
-  dp_mapping_2026_Q1.xlsx
+Mapping Excel file (already in tests/fixtures/):
+  mapping_2026_Q1.xlsx
 """
 
 import os
@@ -60,8 +59,7 @@ YEAR    = "2026"
 QUARTER = "Q1"
 
 FILE_PATHS = MappingFilePaths(
-    api_mapping_file_path     = os.path.join(_FIXTURES_DIR, "api_mapping_2026_Q1.xlsx"),
-    dp_mapping_file_path      = os.path.join(_FIXTURES_DIR, "dp_mapping_2026_Q1.xlsx"),
+    mapping_file_path         = os.path.join(_FIXTURES_DIR, "mapping_2026_Q1.xlsx"),
     header_mapping_sheet_name = "Header Mapping",
     item_mapping_sheet_name   = "Item Mapping",
     uom_mapping_sheet_name    = "UOM Mapping",
@@ -97,7 +95,6 @@ def _write_outputs(cache: MappingDataCache):
     os.makedirs(_OUTPUTS_DIR, exist_ok=True)
     fields = {
         "header_mapping":       cache.header_mapping_df,
-        "cmo_type_mapping":     cache.pl_type_mapping_df,
         "item_mapping":         cache.item_mapping_df,
         "uom_mapping":          cache.uom_mapping_df,
         "plant_name_mapping":   cache.plant_name_mapping_df,
@@ -131,8 +128,7 @@ def main():
     # Warn about any missing fallback files up front
     missing = [
         path for path in [
-            FILE_PATHS.api_mapping_file_path,
-            FILE_PATHS.dp_mapping_file_path,
+            FILE_PATHS.mapping_file_path,
             FILE_PATHS.sap_report_file_path,
             REF_PATHS.plant_name_mapping_file_path,
             REF_PATHS.material_master_file_path,
@@ -163,7 +159,6 @@ def main():
     # Print summary of every dataframe in the cache
     logger.info("\n--- Cache summary ---")
     _print_df_summary("header_mapping",       cache.header_mapping_df)
-    _print_df_summary("cmo_type_mapping",     cache.pl_type_mapping_df)
     _print_df_summary("item_mapping",         cache.item_mapping_df)
     _print_df_summary("uom_mapping",          cache.uom_mapping_df)
     _print_df_summary("plant_name_mapping",   cache.plant_name_mapping_df)

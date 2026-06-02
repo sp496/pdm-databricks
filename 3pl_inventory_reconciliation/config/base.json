@@ -5,7 +5,9 @@
   "data_bkt_mount_point": "$buckets.pdm_gsc_bi.mount",
   "src_data_dir": "pdm-gilead-dna/{env}/gilead/supplychain/3pl_inventory_reconciliation",
   "raw_data_dir": "3pl_inventory_reconciliation/raw",
+  "tracking_table":       "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`file_tracking`",
   "curated_table":        "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`curated_3pl_inventory`",
   "header_mapping_table": "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`header_mapping`",
-  "sap_report_table":     "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`sap_report`"
+  "sap_report_table":     "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`sap_report`",
+  "ebs_clinical_inventory_table": "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`ebs_clinical_inventory`"
 }

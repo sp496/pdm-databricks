@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
 from common.backends import DataBackend
-from .queries import get_queries
+from .queries import get_queries, get_clinical_queries
 
 _COL_CLEAN_PATTERN = r'[ ,;{}()\n\t=]'
 
@@ -20,9 +20,8 @@ def quarter_end_date(year: str, quarter: str) -> str:
 
 @dataclass
 class MappingFilePaths:
-    """Paths to the per-quarter Excel mapping files and SAP report."""
-    api_mapping_file_path: str
-    dp_mapping_file_path: str
+    """Paths to the per-quarter Excel mapping file and optional SAP report."""
+    mapping_file_path: str
     header_mapping_sheet_name: str
     item_mapping_sheet_name: str
     uom_mapping_sheet_name: str
@@ -53,7 +52,6 @@ class MappingDataCache:
     def __init__(self):
         self.header_mapping_df = None
         self.header_mapping = None     # pre-built dict from build_header_mapping()
-        self.pl_type_mapping_df = None
         self.plant_name_mapping_df = None
         self.item_mapping_df = None
         self.material_master_df = None
@@ -68,6 +66,22 @@ class MappingDataCache:
         self.material_description_df = None
 
 
+def load_sap_report_file(path: str) -> pd.DataFrame:
+    """Read a SAP report CSV and apply the standard column-name cleanup.
+
+    Used by:
+      - notebooks/curated/write_inventory_tables.py (direct caller)
+      - load_file_mappings (internal — kept for backwards compatibility;
+        the SAP path through that loader is no longer exercised by any
+        in-tree notebook).
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"SAP report not found at {path}")
+    df = pd.read_csv(path, dtype=str)
+    df.columns = df.columns.str.replace(_COL_CLEAN_PATTERN, '_', regex=True)
+    return df
+
+
 def _load_excel_sheet(file_path: str, sheet_name: str) -> pd.DataFrame:
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Required mapping file not found at {file_path}")
@@ -79,13 +93,17 @@ def _load_excel_sheet(file_path: str, sheet_name: str) -> pd.DataFrame:
     return df
 
 
-def _load_and_combine_sheet(dp_path: str, api_path: str, sheet_name: str) -> pd.DataFrame:
-    dp_df = _load_excel_sheet(dp_path, sheet_name).assign(**{'3PL_Type': 'DP'})
-    api_df = _load_excel_sheet(api_path, sheet_name).assign(**{'3PL_Type': 'API'})
-    combined = pd.concat([dp_df, api_df], ignore_index=True)
-    combined.columns = combined.columns.str.replace(_COL_CLEAN_PATTERN, '_', regex=True)
-    combined = combined.replace("\xa0", "", regex=False)
-    return combined
+def _load_sheet(file_path: str, sheet_name: str) -> pd.DataFrame:
+    """Load one sheet from the per-quarter mapping workbook.
+
+    Applies the standard column-name cleanup (`_COL_CLEAN_PATTERN`) and
+    strips non-breaking spaces. Replaces the legacy DP/API split helper —
+    the new layout ships one workbook per segment, with no DP/API tagging.
+    """
+    df = _load_excel_sheet(file_path, sheet_name)
+    df.columns = df.columns.str.replace(_COL_CLEAN_PATTERN, '_', regex=True)
+    df = df.replace("\xa0", "", regex=False)
+    return df
 
 
 def _coerce_string_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -110,7 +128,7 @@ def build_header_mapping(header_mapping_df: pd.DataFrame) -> dict:
     hdf = header_mapping_df.dropna(subset=["3PL"]).copy()
     hdf["Sheet_Name"] = (
         hdf.groupby("3PL")["Sheet_Name"].ffill()
-        .str.lower()
+        .str.lower().str.strip().str.replace(r"\s+", " ", regex=True)
     )
     hdf["3PL_Column_Header"] = (
         hdf["3PL_Column_Header"].str.lower().str.strip().str.replace(r"\s+", " ", regex=True)
@@ -159,15 +177,12 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
 
     try:
         print("\tLoading header mappings...")
-        cache.header_mapping_df = _load_and_combine_sheet(
-            file_paths.dp_mapping_file_path,
-            file_paths.api_mapping_file_path,
-            file_paths.header_mapping_sheet_name
+        cache.header_mapping_df = _load_sheet(
+            file_paths.mapping_file_path,
+            file_paths.header_mapping_sheet_name,
         )
-        print(f"\tSuccessfully loaded and combined Header Mapping ({len(cache.header_mapping_df)} rows)")
+        print(f"\tSuccessfully loaded Header Mapping ({len(cache.header_mapping_df)} rows)")
         cache.header_mapping = build_header_mapping(cache.header_mapping_df)
-        cache.pl_type_mapping_df = cache.header_mapping_df[['3PL', '3PL_Type']].drop_duplicates(
-            ignore_index=True).astype(str)
     except FileNotFoundError as e:
         print(f"\tFailed to load Header Mapping (File Not Found): {e}")
         raise
@@ -177,12 +192,11 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
 
     try:
         print("\tLoading Item Mappings...")
-        cache.item_mapping_df = _load_and_combine_sheet(
-            file_paths.dp_mapping_file_path,
-            file_paths.api_mapping_file_path,
-            file_paths.item_mapping_sheet_name
+        cache.item_mapping_df = _load_sheet(
+            file_paths.mapping_file_path,
+            file_paths.item_mapping_sheet_name,
         )
-        print(f"\tSuccessfully loaded and combined Item Mappings ({len(cache.item_mapping_df)} rows)")
+        print(f"\tSuccessfully loaded Item Mappings ({len(cache.item_mapping_df)} rows)")
         cache.item_mapping_df = cache.item_mapping_df.dropna(subset=["3PL_Part"])
     except FileNotFoundError as e:
         print(f"\tFailed to load Item Mappings (File Not Found): {e}")
@@ -193,12 +207,11 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
 
     try:
         print("\tLoading UOM Mappings...")
-        cache.uom_mapping_df = _load_and_combine_sheet(
-            file_paths.dp_mapping_file_path,
-            file_paths.api_mapping_file_path,
-            file_paths.uom_mapping_sheet_name
+        cache.uom_mapping_df = _load_sheet(
+            file_paths.mapping_file_path,
+            file_paths.uom_mapping_sheet_name,
         )
-        print(f"\tSuccessfully loaded and combined UOM Mappings ({len(cache.uom_mapping_df)} rows)")
+        print(f"\tSuccessfully loaded UOM Mappings ({len(cache.uom_mapping_df)} rows)")
         cache.uom_mapping_df = cache.uom_mapping_df.dropna(subset=["3PL_Part"])
         cache.uom_mapping_df["Conversion_Factor"] = cache.uom_mapping_df["Conversion_Factor"].astype(float)
     except FileNotFoundError as e:
@@ -214,8 +227,7 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
     elif not os.path.exists(file_paths.sap_report_file_path):
         print(f"\tSAP report not found at {file_paths.sap_report_file_path} — skipping")
     else:
-        cache.sap_report_df = pd.read_csv(file_paths.sap_report_file_path, dtype=str)
-        cache.sap_report_df.columns = cache.sap_report_df.columns.str.replace(_COL_CLEAN_PATTERN, '_', regex=True)
+        cache.sap_report_df = load_sap_report_file(file_paths.sap_report_file_path)
 
     print("File-based mappings loaded successfully!")
     return cache
@@ -228,6 +240,7 @@ def load_mapping_files(
         quarter: str,
         data_source: str = "spark",
         starburst_config: Optional[Dict[str, Any]] = None,
+        segment: str = "commercial",
 ) -> MappingDataCache:
     """
     Load all reference data and return a fully populated MappingDataCache.
@@ -244,11 +257,21 @@ def load_mapping_files(
             'file'       — local/testing, skips all live queries and loads from files directly.
         starburst_config: Required when data_source='starburst'. Dict with keys:
             base_url, username, password, default_catalog, default_schema.
+        segment: 'commercial' (SAP/S4H reference queries) or 'clinical'
+            (EBS reference queries). Selects which query set to run; the result
+            column names are identical (the clinical queries alias to the same
+            canonical names), so the downstream transforms are segment-agnostic.
+            The clinical set has no 'unit_cost' — callers should pass
+            ref_paths.unit_cost_file_path=None for clinical so that block skips.
     """
     cache = load_file_mappings(file_paths)
 
     backend = DataBackend(data_source=data_source, starburst_config=starburst_config)
-    queries = get_queries(quarter_end_date(year, quarter), data_source)
+    queries = (
+        get_clinical_queries(data_source)
+        if segment == "clinical"
+        else get_queries(quarter_end_date(year, quarter), data_source)
+    )
 
     print("Loading live-query datasets...")
 

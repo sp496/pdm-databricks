@@ -102,22 +102,28 @@ def discover_3pl_files(dbutils, quarter_root):
     return results
 
 
-def discover_mapping_files(dbutils, quarter_root):
-    """Return {"api": path, "dp": path} for the quarter's mapping files."""
-    seg_map = {"api": None, "dp": None}
+def discover_mapping_file(dbutils, quarter_root):
+    """Return the path to the per-quarter mapping workbook, or None.
+
+    Walks `{quarter_root}/mapping_files/` and returns the first file whose
+    basename starts with `mapping_` (case-insensitive), skipping Excel lock
+    files (~$...). The legacy split into `api_mapping_*.xlsx` /
+    `dp_mapping_*.xlsx` is no longer supported — both segments now ship a
+    single per-quarter file named `mapping_{year}_{quarter}.xlsx`.
+    """
     mapping_dir = os.path.join(quarter_root, "mapping_files")
     try:
         entries = dbutils.fs.ls(mapping_dir)
     except Exception as e:
         print(f"  No mapping files at {mapping_dir}: {e}")
-        return seg_map
+        return None
     for entry in entries:
-        name = os.path.basename(entry.path).lower()
-        if name.startswith("api_mapping"):
-            seg_map["api"] = entry.path
-        elif name.startswith("dp_mapping"):
-            seg_map["dp"] = entry.path
-    return seg_map
+        name = os.path.basename(entry.path)
+        if name.startswith("~$"):
+            continue
+        if name.lower().startswith("mapping_"):
+            return entry.path
+    return None
 
 
 def discover_all_raw_csvs(dbutils, quarter_root):

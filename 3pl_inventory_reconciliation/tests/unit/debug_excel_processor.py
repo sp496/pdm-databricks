@@ -50,8 +50,7 @@ SAMPLE_FILE        = os.path.join(_SAMPLE_DIR, "Accx.xlsx")
 SITE_ID            = "1205"
 SEGMENT            = "commercial"
 
-MAPPING_FILE_API   = os.path.join(_FIXTURES_DIR, "api_mapping_2026_Q1.xlsx")
-MAPPING_FILE_DP    = os.path.join(_FIXTURES_DIR, "dp_mapping_2026_Q1.xlsx")
+MAPPING_FILE       = os.path.join(_FIXTURES_DIR, "mapping_2026_Q1.xlsx")
 MAPPING_SHEET_NAME = "Header Mapping"
 
 SAP_FILE           = os.path.join(_FIXTURES_DIR, "WRTRR1226 - Inventory Quantity - Q1 2026.xlsx")  # set to an xlsx path to also test process_sap_file
@@ -83,7 +82,7 @@ def main():
     # Load mappings via load_quarter_mappings (tests mapping_loader too)
     # -----------------------------------------------------------------------
     logger.info("\n--- Loading mappings ---")
-    mapping_paths = {SEGMENT: {"api": MAPPING_FILE_API, "dp": MAPPING_FILE_DP}}
+    mapping_paths = {SEGMENT: MAPPING_FILE}
     _, site_sheet_mapping = load_quarter_mappings(mapping_paths, MAPPING_SHEET_NAME)
     sheet_mapping = site_sheet_mapping.get(SITE_ID)
     logger.info(f"  Sheet/column mapping for {SITE_ID}: {sheet_mapping or '(none)'}")

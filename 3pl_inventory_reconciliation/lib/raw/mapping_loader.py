@@ -1,7 +1,7 @@
-"""Load and combine API + DP header mapping workbooks for a quarter.
+"""Load the per-quarter header mapping workbook(s) for one or more segments.
 
 Produces:
-    header_mapping_df:  combined DataFrame with CMO_Type and Segment columns
+    header_mapping_df:  combined DataFrame with a Segment column
     site_sheet_mapping: {site_id: {sheet_name: [expected_columns]}}
 """
 import os
@@ -30,11 +30,11 @@ def _split_items(raw, sep):
     return [s.strip() for s in re.split(sep, str(raw)) if s.strip()]
 
 
-def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
-    """Load and combine API+DP mapping files across all segments.
+def load_quarter_mappings(mapping_path_by_segment, sheet_name):
+    """Load the header-mapping sheet from one mapping file per segment.
 
     Args:
-        mapping_paths_by_segment: {segment: {"api": path, "dp": path}}
+        mapping_path_by_segment: {segment: path}
             Paths must be local-filesystem paths (e.g. /dbfs/mnt/...).
         sheet_name: name of the header-mapping sheet within each workbook
 
@@ -45,16 +45,12 @@ def load_quarter_mappings(mapping_paths_by_segment, sheet_name):
         apply to any single-sheet workbook for that site)
     """
     frames = []
-    for segment, paths in mapping_paths_by_segment.items():
-        for type_key, type_label in (("dp", "DP"), ("api", "API")):
-            file_path = paths.get(type_key)
-            if not file_path:
-                print(f"  No {type_key.upper()} mapping for segment '{segment}', skipping")
-                continue
-            df = _load_sheet(file_path, sheet_name).assign(
-                CMO_Type=type_label, Segment=segment
-            )
-            frames.append(df)
+    for segment, file_path in mapping_path_by_segment.items():
+        if not file_path:
+            print(f"  No mapping file for segment '{segment}', skipping")
+            continue
+        df = _load_sheet(file_path, sheet_name).assign(Segment=segment)
+        frames.append(df)
 
     if not frames:
         raise RuntimeError("No mapping files loaded for the quarter")

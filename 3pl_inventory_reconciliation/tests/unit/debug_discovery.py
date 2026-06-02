@@ -19,13 +19,13 @@ Fixture layout (mirrors the real S3 structure — segment-first):
   │       └── Q1/
   │           ├── 3pl_files/
   │           │   └── WRTRR1226/   ← drop any inventory xlsx here
-  │           └── mapping_files/   ← api_mapping_*.xlsx, dp_mapping_*.xlsx
+  │           └── mapping_files/   ← mapping_*.xlsx (single file)
   └── commercial/
       └── 2026/
           └── Q1/
               ├── 3pl_files/
               │   └── 1205/        ← drop any inventory xlsx here
-              ├── mapping_files/   ← api_mapping_*.xlsx, dp_mapping_*.xlsx
+              ├── mapping_files/   ← mapping_*.xlsx (single file)
               └── sap_report_files/ ← sap_report_*.xlsx
 """
 
@@ -47,7 +47,7 @@ for _p in [_REPO_ROOT, _PROJECT_ROOT]:
 from lib.discovery import (
     get_latest_completed_quarter,
     discover_3pl_files,
-    discover_mapping_files,
+    discover_mapping_file,
     discover_sap_file,
 )
 
@@ -122,11 +122,11 @@ def main():
         logger.info(f"  Quarter root: {quarter_root}")
 
         # -------------------------------------------------------------------
-        # 2. Discover mapping files
+        # 2. Discover mapping file
         # -------------------------------------------------------------------
-        logger.info("\n--- discover_mapping_files ---")
-        mapping_paths = discover_mapping_files(dbutils, quarter_root)
-        logger.info(f"  api={mapping_paths.get('api')}  dp={mapping_paths.get('dp')}")
+        logger.info("\n--- discover_mapping_file ---")
+        mapping_path = discover_mapping_file(dbutils, quarter_root)
+        logger.info(f"  mapping={mapping_path}")
 
         # -------------------------------------------------------------------
         # 3. Discover 3PL inventory files

@@ -48,7 +48,6 @@ _OUTPUT_COLUMNS = [
     "3PL_UOM",
     "3PL",
     "3PL_Name",
-    "3PL_Type",
     "3PL_Material_Code",
     "3PL_Material_Type",
     "Line_item_variance_threshold_amount",
@@ -103,15 +102,9 @@ def process_commercial_spark(
     )
 
     # ------------------------------------------------------------------
-    # Filter SAP to known 3PL plant numbers
-    # ------------------------------------------------------------------
-    plant_numbers_sdf = (
-        header_mapping_sdf
-        .select(F.col("3PL").alias("Plant"))
-        .distinct()
-    )
-    sap_sdf = sap_sdf.join(F.broadcast(plant_numbers_sdf), on="Plant", how="inner")
-
+    # SAP is pre-filtered to relevant plants by write_inventory_tables
+    # before being written to the sap_report Delta table, so no additional
+    # plant filter is applied here.
     # ------------------------------------------------------------------
     # Year / Quarter: both tables are pre-filtered to the same partition
     # — extract once and stamp the whole column with lit()
@@ -155,7 +148,6 @@ def process_commercial_spark(
         F.col("cur.3PL_Name").alias("3PL_Name"),
         F.col("cur.3PL_Material_Code").alias("3PL_Material_Code"),
         F.col("cur.3PL_Material_Type").alias("3PL_Material_Type"),
-        F.col("cur.3PL_Type").alias("3PL_Type"),
         F.col("cur.3PL_Batch_Number").alias("3PL_Batch_Number"),
         F.col("cur.Gilead_Batch_Number").alias("Gilead_Batch_Number"),
         F.col("cur.3PL_UOM").alias("3PL_UOM"),
@@ -207,22 +199,6 @@ def process_commercial_spark(
     )
 
     # ------------------------------------------------------------------
-    # 3PL_Type enrichment for SAP-only rows
-    # (curated rows already carry 3PL_Type; coalesce fills the gap)
-    # ------------------------------------------------------------------
-    type_lookup = (
-        header_mapping_sdf
-        .select(F.col("3PL").alias("_t_3PL"), F.col("3PL_Type").alias("_sap_3PL_Type"))
-        .dropDuplicates(["_t_3PL"])
-    )
-    combined = (
-        combined
-        .join(F.broadcast(type_lookup), combined["Plant"] == type_lookup["_t_3PL"], "left")
-        .withColumn("3PL_Type", F.coalesce(F.col("3PL_Type"), F.col("_sap_3PL_Type")))
-        .drop("_t_3PL", "_sap_3PL_Type")
-    )
-
-    # ------------------------------------------------------------------
     # Plant classification
     # ------------------------------------------------------------------
     classification_lookup = (
@@ -265,7 +241,6 @@ def process_commercial_spark(
         "3PL_UOM",
         "3PL",
         "3PL_Name",
-        "3PL_Type",
         "3PL_Material_Code",
         "3PL_Material_Type",
         "Line_item_variance_threshold_amount",

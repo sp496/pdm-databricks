@@ -21,7 +21,7 @@ sys.path.extend([project_root, repo_root])
 from lib.discovery import (
     get_latest_completed_quarter,
     discover_3pl_files,
-    discover_mapping_files,
+    discover_mapping_file,
 )
 from lib.raw.mapping_loader import load_quarter_mappings
 from lib.raw.excel_processor import process_3pl_file
@@ -95,20 +95,27 @@ for segment in segments:
     target_quarter_root = f"{tgt_root}/{segment}/{year}/{quarter}"
 
     # ------------------------------------------------------------------
-    # Reset target raw layer for this quarter (idempotent rerun)
+    # Reset only the 3pl_files folder for this quarter (idempotent rerun).
+    # Scoping to 3pl_files/ avoids wiping sap_report_files/ and
+    # mapping_files/ which are written by separate notebooks and may have
+    # already been staged for this quarter.
     # ------------------------------------------------------------------
-    print(f"Removing prior raw output at: {target_quarter_root}")
-    dbutils.fs.rm(f"dbfs:{target_quarter_root}", recurse=True)
+    target_3pl_root = f"{target_quarter_root}/3pl_files"
+    print(f"Removing prior 3PL raw output at: {target_3pl_root}")
+    dbutils.fs.rm(f"dbfs:{target_3pl_root}", recurse=True)
 
     # ------------------------------------------------------------------
-    # Load mapping files
+    # Load mapping file
     # ------------------------------------------------------------------
-    mapping_paths = discover_mapping_files(dbutils, quarter_root)
-    print(f"Mapping paths: {mapping_paths}")
+    mapping_path = discover_mapping_file(dbutils, quarter_root)
+    print(f"Mapping path: {mapping_path}")
+    if not mapping_path:
+        print(f"  No mapping file under {quarter_root}/mapping_files — skipping segment")
+        continue
 
-    resolved_mapping_paths = {k: dbfs_path(v) if v else v for k, v in mapping_paths.items()}
+    resolved_mapping_path = dbfs_path(mapping_path)
     _, site_sheet_mapping = load_quarter_mappings(
-        {segment: resolved_mapping_paths}, header_sheet_name
+        {segment: resolved_mapping_path}, header_sheet_name
     )
     print(f"3PLs in mapping: {sorted(site_sheet_mapping.keys())}")
 

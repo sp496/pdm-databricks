@@ -25,9 +25,8 @@ sys.path.extend([project_root, repo_root])
 
 import pandas as pd
 
-from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_files
-from lib.curated.transformations import remove_decimal_if_all_zeros
-from lib.discovery import discover_mapping_files, discover_sap_file
+from lib.curated.data_cache import MappingFilePaths, load_file_mappings
+from lib.discovery import discover_mapping_file
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
 
@@ -38,11 +37,8 @@ from common.dbfs_utils import dbfs_path
 
 # COMMAND ----------
 
-env         = dbutils.widgets.get("DATAENV")
-data_source = "spark" if env == "prd" else "starburst"
-
+env = dbutils.widgets.get("DATAENV")
 print(f"Environment  : {env}")
-print(f"Data source  : {data_source}")
 
 # COMMAND ----------
 
@@ -63,23 +59,9 @@ run_mode     = run_config["run_mode"]
 header_mapping_table = curated_cfg["header_mapping_table"].format(env=env)
 item_mapping_table   = curated_cfg["item_mapping_table"].format(env=env)
 uom_mapping_table    = curated_cfg["uom_mapping_table"].format(env=env)
-sap_report_table     = curated_cfg["sap_report_table"].format(env=env)
-
-ref_base = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['ref_data_dir']}"
 
 print(f"Segments : {segments}")
 print(f"Run mode : {run_mode}")
-
-# Starburst config — only used in non-prod environments
-starburst_config = None
-if data_source == "starburst":
-    starburst_config = {
-        "base_url"        : "jdbc:trino://query.gilead.com:443",
-        "username"        : dbutils.secrets.get(scope="pdm-gsc", key="starburst-username"),
-        "password"        : dbutils.secrets.get(scope="pdm-gsc", key="starburst-password"),
-        "default_catalog" : "pdm",
-        "default_schema"  : "default",
-    }
 
 if run_mode == "historical":
     hist_year    = run_config.get("year")
@@ -100,6 +82,26 @@ def _write_delta(df: pd.DataFrame, table: str, label: str, segment: str, year: s
     df["Segment"] = segment
     df["Year"]    = year
     df["Quarter"] = quarter
+
+    if df.empty:
+        # No rows for this segment/quarter — clear any prior content of
+        # this partition (idempotent re-runs) and skip the Spark write.
+        # Spark's createDataFrame can't infer a schema from an empty
+        # pandas DataFrame, so we bypass it entirely. `DELETE` is a no-op
+        # if the table doesn't exist yet or no rows match.
+        try:
+            spark.sql(
+                f"DELETE FROM {table} "
+                f"WHERE Segment = '{segment}' "
+                f"AND Year = '{year}' AND Quarter = '{quarter}'"
+            )
+            print(f"  {label}: empty for {segment}/{year}/{quarter} "
+                  f"— cleared partition (no write)")
+        except Exception as e:
+            print(f"  {label}: empty for {segment}/{year}/{quarter} "
+                  f"— skipped (table not yet created: {e.__class__.__name__})")
+        return
+
     spark_df = spark.createDataFrame(df)
     (
         spark_df.write
@@ -155,44 +157,40 @@ for segment in segments:
     # Discover files
     # ------------------------------------------------------------------
     try:
-        mapping_paths = discover_mapping_files(dbutils, src_quarter_root)
-        print(f"  Mapping files: {mapping_paths}")
+        mapping_path = discover_mapping_file(dbutils, src_quarter_root)
+        print(f"  Mapping file: {mapping_path}")
 
-        if not mapping_paths.get("api") or not mapping_paths.get("dp"):
-            print(f"  Could not find api/dp mapping files under {src_quarter_root}/mapping_files — skipping segment")
-            all_errors.append((segment, "file discovery", "Missing api/dp mapping files"))
+        if not mapping_path:
+            print(f"  Could not find mapping file under {src_quarter_root}/mapping_files — skipping segment")
+            all_errors.append((segment, "file discovery", "Missing mapping file"))
             continue
 
-        sap_report_path = discover_sap_file(dbutils, raw_quarter_root)
-        if sap_report_path:
-            print(f"  SAP report   : {sap_report_path}")
-        else:
-            print(f"  SAP report   : not found under {raw_quarter_root}/sap_report_files — will skip sap_report table")
-
         file_paths = MappingFilePaths(
-            api_mapping_file_path     = dbfs_path(mapping_paths["api"]),
-            dp_mapping_file_path      = dbfs_path(mapping_paths["dp"]),
+            mapping_file_path         = dbfs_path(mapping_path),
             header_mapping_sheet_name = "Header Mapping",
             item_mapping_sheet_name   = "Item Mapping",
             uom_mapping_sheet_name    = "UOM Mapping",
-            sap_report_file_path      = dbfs_path(sap_report_path) if sap_report_path else None,
         )
 
-        ref_paths = RefFilePaths()
-
-        cache = load_mapping_files(
-            file_paths       = file_paths,
-            ref_paths        = ref_paths,
-            year             = year,
-            quarter          = quarter,
-            data_source      = data_source,
-            starburst_config = starburst_config,
-        )
+        # File-only loader — no DataBackend / Starburst / Spark probing needed,
+        # since this notebook never queries live sources (no ref_paths involved).
+        cache = load_file_mappings(file_paths)
 
     except Exception as e:
         print(f"  ERROR loading files for {segment}: {e}")
         all_errors.append((segment, "file loading", str(e)))
         continue
+
+    # ------------------------------------------------------------------
+    # Sanity log — verifies the mapping file actually loaded for this
+    # segment matches the segment we're about to write under.
+    # ------------------------------------------------------------------
+    print(f"\n  Loaded mapping content for segment='{segment}':")
+    print(f"    Source path : {dbfs_path(mapping_path)}")
+    print(f"    header_mapping rows : {len(cache.header_mapping_df)}")
+    if "3PL" in cache.header_mapping_df.columns:
+        sample_3pls = sorted(cache.header_mapping_df["3PL"].dropna().astype(str).unique())[:10]
+        print(f"    Sample 3PL codes    : {sample_3pls}")
 
     # ------------------------------------------------------------------
     # Write to Delta tables
@@ -202,15 +200,6 @@ for segment in segments:
     _write_delta(cache.header_mapping_df, header_mapping_table, "header_mapping", segment, year, quarter)
     _write_delta(cache.item_mapping_df,   item_mapping_table,   "item_mapping",   segment, year, quarter)
     _write_delta(cache.uom_mapping_df,    uom_mapping_table,    "uom_mapping",    segment, year, quarter)
-
-    if cache.sap_report_df is not None:
-        sap_df = cache.sap_report_df.copy()
-        sap_df["Batch_Number"]                  = sap_df["Batch_Number"].apply(remove_decimal_if_all_zeros)
-        sap_df["Stock_Quantity__Base_UOM_"]     = pd.to_numeric(sap_df["Stock_Quantity__Base_UOM_"],     errors="coerce")
-        sap_df["Group_Valuation_Standard_Cost"] = pd.to_numeric(sap_df["Group_Valuation_Standard_Cost"], errors="coerce")
-        _write_delta(sap_df, sap_report_table, "sap_report", segment, year, quarter)
-    else:
-        print(f"  sap_report: skipped (no SAP report found)")
 
 # COMMAND ----------
 

@@ -6,7 +6,7 @@
 # MAGIC ## 3PL Inventory — Reconciliation Layer
 # MAGIC Loops over the configured segments (commercial, clinical) and runs the
 # MAGIC segment-specific reconciliation pipeline against the curated + SAP Delta tables.
-# MAGIC Output is written to a single reconciled_3pl_inventory table partitioned by (Segment, Year, Quarter).
+# MAGIC Output is written to reconciled_3pl_commercial_inventory / reconciled_3pl_clinical_inventory tables, both partitioned by (Segment, Year, Quarter).
 # MAGIC
 # MAGIC - **commercial** — full reconciliation pipeline implemented in `lib.processed.process_commercial`
 # MAGIC - **clinical**   — placeholder; logic to be added later
@@ -28,7 +28,7 @@ from datetime import datetime
 from pyspark.sql.functions import col, lit
 from pyspark.sql.types import StringType, DoubleType, BooleanType, IntegerType
 
-from lib.processed.transformations import process_commercial
+from lib.processed.transformations import process_commercial, process_clinical
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
 
@@ -56,9 +56,11 @@ segments   = processed_cfg["segments"]
 run_config = processed_cfg["run_config"]
 run_mode   = run_config["run_mode"]
 
-curated_table        = processed_cfg["curated_table"].format(env=env)
-header_mapping_table = processed_cfg["header_mapping_table"].format(env=env)
-sap_report_table     = processed_cfg["sap_report_table"].format(env=env)
+curated_table                = processed_cfg["curated_table"].format(env=env)
+header_mapping_table         = processed_cfg["header_mapping_table"].format(env=env)
+sap_report_table             = processed_cfg["sap_report_table"].format(env=env)
+ebs_clinical_inventory_table = processed_cfg["ebs_clinical_inventory_table"].format(env=env)
+reconciled_clinical_table    = processed_cfg["reconciled_clinical_table"].format(env=env)
 
 print(f"Segments        : {segments}")
 print(f"Run mode        : {run_mode}")
@@ -119,6 +121,20 @@ def load_segment_data(segment: str, year: str, quarter: str):
     return curated_df, sap_df, header_df
 
 
+def load_clinical_segment_data(year: str, quarter: str):
+    """Load curated (clinical), EBS staging, and header_mapping (clinical) for the quarter.
+
+    Note: ebs_clinical_inventory is partitioned by (Year, Quarter) only, so
+    the segment filter is not applied to it (the table is clinical-only).
+    """
+    curated_f = (col("Segment") == "clinical") & (col("Year") == year) & (col("Quarter") == quarter)
+    ebs_f     = (col("Year") == year) & (col("Quarter") == quarter)
+    curated_df = spark.table(curated_table).filter(curated_f).toPandas()
+    ebs_df     = spark.table(ebs_clinical_inventory_table).filter(ebs_f).toPandas()
+    header_df  = spark.table(header_mapping_table).filter(curated_f).toPandas()
+    return curated_df, ebs_df, header_df
+
+
 def finalise_and_write(combined_df: pd.DataFrame, target_table: str, segment: str, year: str, quarter: str) -> int:
     """Convert pandas DataFrame to Spark, enrich Plant_Name,
     cast columns, and write to the target Delta table."""
@@ -161,7 +177,6 @@ def finalise_and_write(combined_df: pd.DataFrame, target_table: str, segment: st
         col("3PL_UOM").cast(StringType()),
         col("3PL").cast(StringType()),
         col("3PL_Name").cast(StringType()),
-        col("3PL_Type").cast(StringType()),
         col("3PL_Material_Code").cast(StringType()),
         col("3PL_Material_Type").cast(StringType()),
         col("Line_item_variance_threshold_amount").cast(IntegerType()),
@@ -185,6 +200,80 @@ def finalise_and_write(combined_df: pd.DataFrame, target_table: str, segment: st
         .format("delta")
         .mode("overwrite")
         .option("replaceWhere", f"Segment = '{segment}' AND Year = '{year}' AND Quarter = '{quarter}'")
+        .option("overwriteSchema", "false")
+        .saveAsTable(target_table)
+    )
+    return spark_df.count()
+
+
+def finalise_and_write_clinical(combined_df: pd.DataFrame, target_table: str, year: str, quarter: str) -> int:
+    """Stamp Processing_Timestamp and Segment, backfill EBS context for
+    curated-only rows, cast columns, and write to the clinical reconciled
+    Delta table."""
+    spark_df = spark.createDataFrame(combined_df)
+    spark_df = spark_df.withColumn(
+        "Processing_Timestamp",
+        lit(datetime.now().strftime("%Y-%m-%d %H:%M:00")),
+    )
+    spark_df = spark_df.withColumn("Segment", lit("clinical"))
+
+    # Backfill EBS context for curated-only rows by looking up rows with the
+    # same Org_Code that have the EBS context populated.
+    ebs_ctx = (
+        spark_df
+        .select("Org_Code", "Inventory_Org_Name", "Operating_Unit_Name", "Legal_Entity_Name")
+        .filter(col("Inventory_Org_Name").isNotNull())
+        .distinct()
+    )
+    spark_df = (
+        spark_df
+        .drop("Inventory_Org_Name", "Operating_Unit_Name", "Legal_Entity_Name")
+        .join(ebs_ctx, on="Org_Code", how="left")
+    )
+
+    spark_df = spark_df.select(
+        col("Org_Code").cast(StringType()),
+        col("Inventory_Org_Name").cast(StringType()),
+        col("Operating_Unit_Name").cast(StringType()),
+        col("Legal_Entity_Name").cast(StringType()),
+        col("Material_Group").cast(StringType()),
+        col("Item_Number").cast(StringType()),
+        col("Gilead_Material_Code").cast(StringType()),
+        col("Item_Description").cast(StringType()),
+        col("Material_Description").cast(StringType()),
+        col("Lot_Number").cast(StringType()),
+        col("Lot_Status").cast(StringType()),
+        col("Lot_Expiry_Date").cast(StringType()),
+        col("Lot_Retest_Date").cast(StringType()),
+        col("Onhand_Quantity").cast(DoubleType()),
+        col("Allocated_Quantity").cast(DoubleType()),
+        col("Available_To_Reserve_Quantity").cast(DoubleType()),
+        col("Primary_UOM").cast(StringType()),
+        col("3PL_UOM").cast(StringType()),
+        col("3PL").cast(StringType()),
+        col("3PL_Name").cast(StringType()),
+        col("3PL_Material_Code").cast(StringType()),
+        col("3PL_Material_Type").cast(StringType()),
+        col("File_Name").cast(StringType()),
+        col("Date_Processed").cast(StringType()),
+        col("Has_Error").cast(BooleanType()),
+        col("Validation_Remark").cast(StringType()),
+        col("Gilead_Batch_Number").cast(StringType()),
+        col("3PL_Batch_Number").cast(StringType()),
+        col("Plant_Classification").cast(StringType()),
+        col("Effective_Material_Code").cast(StringType()),
+        col("Effective_Batch_Number").cast(StringType()),
+        col("Processing_Timestamp").cast(StringType()),
+        col("Segment").cast(StringType()),
+        col("Year").cast(StringType()),
+        col("Quarter").cast(StringType()),
+    )
+
+    (
+        spark_df.write
+        .format("delta")
+        .mode("overwrite")
+        .option("replaceWhere", f"Segment = 'clinical' AND Year = '{year}' AND Quarter = '{quarter}'")
         .option("overwriteSchema", "false")
         .saveAsTable(target_table)
     )
@@ -226,7 +315,7 @@ for segment in segments:
                 quarter           = quarter,
             )
 
-            target_table = processed_cfg["reconciled_table"].format(env=env)
+            target_table = processed_cfg["reconciled_commercial_table"].format(env=env)
             rows = finalise_and_write(combined_df, target_table, segment, year, quarter)
             print(f"  Wrote {rows} rows to {target_table}")
         except Exception as e:
@@ -234,9 +323,23 @@ for segment in segments:
             errors.append((segment, str(e)))
 
     elif segment == "clinical":
-        # TODO: clinical reconciliation logic
-        print(f"  Clinical processing not implemented yet — skipping")
-        continue
+        try:
+            curated_df, ebs_df, header_df = load_clinical_segment_data(year, quarter)
+            print(f"  curated={curated_df.shape}  ebs={ebs_df.shape}  header_mapping={header_df.shape}")
+
+            combined_df = process_clinical(
+                curated_df        = curated_df,
+                ebs_df            = ebs_df,
+                header_mapping_df = header_df,
+                year              = year,
+                quarter           = quarter,
+            )
+
+            rows = finalise_and_write_clinical(combined_df, reconciled_clinical_table, year, quarter)
+            print(f"  Wrote {rows} rows to {reconciled_clinical_table}")
+        except Exception as e:
+            print(f"  ERROR processing clinical: {e}")
+            errors.append((segment, str(e)))
 
     else:
         print(f"  Unknown segment '{segment}' — no branch defined, skipping")

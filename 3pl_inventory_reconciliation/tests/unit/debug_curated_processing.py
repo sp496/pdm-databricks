@@ -26,8 +26,7 @@ To generate these CSVs locally, run debug_excel_processor.py first and copy
 its outputs from tests/outputs/raw/ into the structure above.
 
 Reference / mapping files (already in tests/fixtures/):
-  api_mapping_2026_Q1.xlsx
-  dp_mapping_2026_Q1.xlsx
+  mapping_2026_Q1_clinical.xlsx
   sap_report.csv
 
 Fallback CSV files expected in tests/fixtures/curated/
@@ -68,12 +67,11 @@ _OUTPUTS_DIR  = os.path.join(_TESTS_DIR, "outputs", "curated")
 
 YEAR    = "2026"
 QUARTER = "Q1"
-SEGMENT = "commercial"
-SITE_ID = "1205"   # must match folder name AND the 3PL column in the mapping Excel
+SEGMENT = "clinical"
+SITE_ID = "183"   # must match folder name AND the 3PL column in the mapping Excel
 
 FILE_PATHS = MappingFilePaths(
-    api_mapping_file_path     = os.path.join(_FIXTURES_DIR, "api_mapping_2026_Q1.xlsx"),
-    dp_mapping_file_path      = os.path.join(_FIXTURES_DIR, "dp_mapping_2026_Q1.xlsx"),
+    mapping_file_path         = os.path.join(_FIXTURES_DIR, "mapping_2026_Q1_clinical.xlsx"),
     header_mapping_sheet_name = "Header Mapping",
     item_mapping_sheet_name   = "Item Mapping",
     uom_mapping_sheet_name    = "UOM Mapping",
@@ -115,8 +113,7 @@ def _discover_raw_csvs(site_dir: str) -> list[str]:
 
 def _warn_missing_files() -> None:
     required = [
-        FILE_PATHS.api_mapping_file_path,
-        FILE_PATHS.dp_mapping_file_path,
+        FILE_PATHS.mapping_file_path,
         FILE_PATHS.sap_report_file_path,
         REF_PATHS.plant_name_mapping_file_path,
         REF_PATHS.material_master_file_path,

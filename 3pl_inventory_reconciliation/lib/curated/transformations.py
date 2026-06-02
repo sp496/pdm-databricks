@@ -54,11 +54,8 @@ def get_site_id(file_path: str) -> str:
 # Metadata enrichment
 # ---------------------------------------------------------------------------
 
-def add_3pl_details(df: pd.DataFrame, site_id: str, plant_name_mapping_df: pd.DataFrame, pl_type_mapping_df: pd.DataFrame) -> pd.DataFrame:
+def add_3pl_details(df: pd.DataFrame, site_id: str, plant_name_mapping_df: pd.DataFrame) -> pd.DataFrame:
     df["3PL"] = site_id
-
-    pl_type_dict = pl_type_mapping_df.set_index("3PL")["3PL_Type"].to_dict()
-    df["3PL_Type"] = pl_type_dict.get(site_id)
 
     plant_name_dict = plant_name_mapping_df.set_index("plant_number")["plant_name"].to_dict()
     df["3PL_Name"] = plant_name_dict.get(site_id)
@@ -124,7 +121,7 @@ def map_3pl_df(df: pd.DataFrame, site_id: str, file_stem: str, header_mapping: d
             valid_cols = [c for c in source_cols if c in df.columns]
             df[target_col] = df[valid_cols].sum(axis=1, min_count=1) if valid_cols else np.nan
 
-        elif target_col == "3PL_Batch_Number":
+        elif target_col in ("3PL_Batch_Number", "Gilead_Batch_Number"):
             df[target_col] = np.nan
             for src in source_cols:
                 if src in df.columns:
@@ -139,15 +136,44 @@ def map_3pl_df(df: pd.DataFrame, site_id: str, file_stem: str, header_mapping: d
                     mask = df[target_col].isna() & df[src].notna()
                     df.loc[mask, target_col] = df.loc[mask, src]
 
-    required_columns = ["3PL_Material_Code", "3PL_Batch_Number", "3PL_Quantity"]
-    missing = [c for c in required_columns if c not in df.columns or df[c].isna().all()]
-    if missing:
-        raise ValueError(f"Validation failed: missing or empty required columns: {', '.join(missing)}")
+        elif target_col == "Gilead_Material_Code":
+            df[target_col] = np.nan
+            for src in source_cols:
+                if src in df.columns:
+                    mask = df[target_col].isna() & df[src].notna()
+                    df.loc[mask, target_col] = df.loc[mask, src]
+
+    # Ensure all four code columns exist so downstream functions never need to
+    # check column presence — they only need to check whether values are present.
+    # Use None (object dtype) so .str accessors downstream stay valid even when
+    # the column is entirely empty.
+    for col in ("3PL_Material_Code", "Gilead_Material_Code",
+                "3PL_Batch_Number",  "Gilead_Batch_Number"):
+        if col not in df.columns:
+            df[col] = None
+
+    # Validation — at least one of (3PL/Gilead) must have values for material and batch
+    if df["3PL_Material_Code"].isna().all() and df["Gilead_Material_Code"].isna().all():
+        raise ValueError(
+            "Validation failed: both 3PL_Material_Code and Gilead_Material_Code are empty — "
+            "header mapping must populate at least one of them."
+        )
+    if df["3PL_Batch_Number"].isna().all() and df["Gilead_Batch_Number"].isna().all():
+        raise ValueError(
+            "Validation failed: both 3PL_Batch_Number and Gilead_Batch_Number are empty — "
+            "header mapping must populate at least one of them."
+        )
+    if "3PL_Quantity" not in df.columns or df["3PL_Quantity"].isna().all():
+        raise ValueError("Validation failed: missing or empty required column: 3PL_Quantity")
 
     if "3PL_UOM" not in df.columns:
         df["3PL_UOM"] = None
 
-    df = df[["3PL_Material_Code", "3PL_Batch_Number", "3PL_Quantity", "3PL_UOM"]]
+    df = df[[
+        "3PL_Material_Code", "Gilead_Material_Code",
+        "3PL_Batch_Number",  "Gilead_Batch_Number",
+        "3PL_Quantity", "3PL_UOM",
+    ]]
     return df
 
 
@@ -156,11 +182,17 @@ def map_3pl_df(df: pd.DataFrame, site_id: str, file_stem: str, header_mapping: d
 # ---------------------------------------------------------------------------
 
 def aggregate_quantities(df: pd.DataFrame) -> pd.DataFrame:
-    main_group_cols = ["3PL", "3PL_Material_Code", "3PL_Batch_Number"]
     group_cols = [c for c in df.columns if c != "3PL_Quantity"]
 
-    valid = df[df[main_group_cols].notna().all(axis=1)]
-    invalid = df[~df[main_group_cols].notna().all(axis=1)]
+    # A row is valid for aggregation when the 3PL is known and at least one of
+    # the 3PL/Gilead variants is populated for both material and batch.
+    valid_mask = (
+        df["3PL"].notna()
+        & (df["3PL_Material_Code"].notna() | df["Gilead_Material_Code"].notna())
+        & (df["3PL_Batch_Number"].notna()  | df["Gilead_Batch_Number"].notna())
+    )
+    valid   = df[valid_mask]
+    invalid = df[~valid_mask]
 
     grouped = valid.groupby(group_cols, dropna=False, as_index=False)["3PL_Quantity"].sum()
     return pd.concat([grouped, invalid], ignore_index=True)
@@ -178,7 +210,9 @@ def map_material_code(df: pd.DataFrame, item_mapping_df: pd.DataFrame, material_
         right_on=["Plant_Number", "3PL_Part"],
     )
 
-    mask = df["Material_Number"].notna()
+    # File-provided Gilead_Material_Code (from header mapping) takes precedence —
+    # only populate from the item_mapping lookup when it's still empty.
+    mask = df["Material_Number"].notna() & df["Gilead_Material_Code"].isna()
     df.loc[mask, "Gilead_Material_Code"] = df.loc[mask, "Material_Number"]
     df = df.drop(columns=["Plant_Number", "3PL_Part", "Material_Number"])
 
@@ -197,7 +231,10 @@ def map_material_code(df: pd.DataFrame, item_mapping_df: pd.DataFrame, material_
     df.loc[mask_invalid, "Validation_Remark"] = "Invalid 3PL Material Code"
     df.loc[mask_invalid, "Has_Error"] = True
 
-    mask_null = df["3PL_Material_Code"].isna()
+    # Only flag "Material Code is NULL in 3PL File" when neither code was provided.
+    # Rows in "Gilead direct" files (3PL_Material_Code null, Gilead_Material_Code present)
+    # are not errors.
+    mask_null = df["3PL_Material_Code"].isna() & df["Gilead_Material_Code"].isna()
     df.loc[mask_null, "Validation_Remark"] = "Material Code is NULL in 3PL File"
     df.loc[mask_null, "Has_Error"] = True
 
@@ -218,7 +255,9 @@ def map_lot_no_wildcard(df: pd.DataFrame, lot_number_master_df: pd.DataFrame, lo
         left_on=["Gilead_Material_Code", "3PL_Batch_Number"],
         right_on=["matnr", "charg"],
     )
-    mask = df["charg"].notna()
+    # File-provided Gilead_Batch_Number (from header mapping) takes precedence —
+    # only populate from the lot_number_master lookup when it's still empty.
+    mask = df["charg"].notna() & df["Gilead_Batch_Number"].isna()
     df.loc[mask, "Gilead_Batch_Number"] = df.loc[mask, "charg"]
     df = df.drop(columns=["matnr", "charg"])
 
@@ -248,7 +287,14 @@ def map_lot_no_wildcard(df: pd.DataFrame, lot_number_master_df: pd.DataFrame, lo
     df.loc[mask_invalid_batch, "Has_Error"] = True
 
     mask_invalid_material = df["Validation_Remark"] == "Invalid 3PL Material Code"
-    mask_null_batch_q_0 = (~mask_invalid_material) & df["3PL_Batch_Number"].isna() & (df["3PL_Quantity"] == 0)
+    # Only flag "Batch Number NULL In 3PL File" when neither batch column was provided —
+    # rows with a file-provided Gilead_Batch_Number should not be flagged.
+    mask_null_batch_q_0 = (
+        (~mask_invalid_material)
+        & df["3PL_Batch_Number"].isna()
+        & df["Gilead_Batch_Number"].isna()
+        & (df["3PL_Quantity"] == 0)
+    )
     df.loc[mask_null_batch_q_0, "Validation_Remark"] = "Batch Number NULL In 3PL File"
     df.loc[mask_null_batch_q_0, "Has_Error"] = False
 
@@ -350,7 +396,6 @@ _OUTPUT_COLUMNS = [
     "3PL_Converted_Quantity",
     "Cost",
     "3PL_Material_Type",
-    "3PL_Type",
     "Material_Description",
     # Validation
     "Has_Error",
@@ -397,7 +442,7 @@ def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: 
     df = map_3pl_df(df, site_id, file_stem, header_mapping)
 
     print("    Adding 3PL details")
-    df = add_3pl_details(df, site_id, mapping_cache.plant_name_mapping_df, mapping_cache.pl_type_mapping_df)
+    df = add_3pl_details(df, site_id, mapping_cache.plant_name_mapping_df)
 
     print("    Post-processing mapped columns")
     df = postprocess_mapped_df(df)
@@ -420,8 +465,13 @@ def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: 
     print("    Processing UOM mapping and conversion")
     df = map_uom_and_convert(df, mapping_cache.uom_mapping_df, mapping_cache.uom_master_df)
 
-    print("    Getting unit costs")
-    df = get_unit_cost(df, mapping_cache.unit_cost_df)
+    if mapping_cache.unit_cost_df is not None:
+        print("    Getting unit costs")
+        df = get_unit_cost(df, mapping_cache.unit_cost_df)
+    else:
+        # Clinical: no EBS unit-cost source — leave Cost null.
+        print("    No unit-cost dataset — leaving Cost null")
+        df["Cost"] = np.nan
 
     print("    Getting material type")
     df = get_material_type(df, mapping_cache.material_type_df)

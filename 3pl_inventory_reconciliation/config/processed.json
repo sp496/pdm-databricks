@@ -1,3 +1,4 @@
 {
-  "reconciled_table": "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`reconciled_3pl_inventory`"
+  "reconciled_commercial_table":   "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`reconciled_3pl_commercial_inventory`",
+  "reconciled_clinical_table":    "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`reconciled_3pl_clinical_inventory`"
 }

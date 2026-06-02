@@ -86,12 +86,37 @@ class DataBackend:
     def _run_query(self, query: str) -> pd.DataFrame:
         if self.data_source == "starburst":
             url = f"{self._base_url}/{self._default_catalog}/{self._default_schema}"
-            spark_df = self._spark.read.jdbc(url=url, table=f"({query}) AS tmp", properties=self._properties)
+            # Wrap the query as a subquery for the JDBC reader. The closing paren
+            # MUST sit on its own line: if the query's last line ends in a `--`
+            # line comment (e.g. "WHERE x = 131  -- Master Org"), placing `) AS tmp`
+            # on the same line would comment out the paren and produce a Trino
+            # "mismatched input '<EOF>'" parse error. Leading/trailing newlines
+            # make the wrapping robust to comments at either end.
+            spark_df = self._spark.read.jdbc(url=url, table=f"(\n{query}\n) AS tmp", properties=self._properties)
             if spark_df.isEmpty():
                 raise Exception("Query returned no results")
             return spark_df.toPandas().astype(str)
         else:
             return self._spark.sql(query).toPandas().astype(str)
+
+    def run_query(self, data_name: str, query: str) -> pd.DataFrame:
+        """Execute a query against the live backend and return a pandas DataFrame.
+
+        Unlike load(), this has no file fallback — use it for queries that have
+        no natural CSV equivalent (e.g. one-off staging queries against a live
+        source system). Raises if data_source='file' or the backend is unavailable.
+        """
+        if self.data_source == "file":
+            raise RuntimeError(f"Cannot run_query for '{data_name}' when data_source='file'")
+        if not self.available:
+            raise RuntimeError(f"{self.name} backend not available for '{data_name}'")
+
+        print(f"\t\tRunning {data_name} query against {self.name}...")
+        indented_query = '\n'.join(['\t\t\t' + line for line in query.split('\n')])
+        print(f"\t\tQuery:\n{indented_query}")
+        df = self._run_query(query)
+        print(f"\t\tSuccessfully loaded {data_name} from {self.name} ({len(df)} rows)")
+        return df
 
     def load(self, data_name: str, query: str, file_path: str,
              file_loader_func: Callable, **loader_kwargs) -> pd.DataFrame:
