@@ -55,8 +55,8 @@ _OUTPUTS_DIR    = os.path.join(_TESTS_DIR, "outputs")
 # Excel mapping files — place in tests/fixtures/ and update filenames below.
 # Set to None if you don't have the file locally; standardization will be skipped.
 LOCAL_MAPPING = {
-    "subject":    None,#r"../fixtures/Subject Summary Header Mapping.xlsx",
-    "depot":      None,#r"../fixtures/Depot Inventory Header Mapping.xlsx",
+    "subject":    r"../fixtures/Subject Summary Header Mapping.xlsx",
+    "depot":      r"../fixtures/Depot Inventory Header Mapping.xlsx",
     "site":       r"../fixtures/Site Inventory Header Mapping.xlsx",
     "slsm":       None,
     "clsm":       None,
@@ -68,12 +68,12 @@ LOCAL_MAPPING = {
 # If subject_visit is set, subject is treated as the Subject Summary and assembly
 # is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
-    "subject":       r"../fixtures/sample_csvs/Gilead GS-US-320-1092_Subject Summary (Unblinded)Subject Summary2026-05-19-13-26-14.csv",
-    "depot":         None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
-    "site":          None,#r"../fixtures/sample_csvs/Gilead GS-US-320-1092_Inventory Summary (Unblinded)Site Inventory Summary2026-05-19-13-25-53.csv",
+    "subject":       r"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Summary2026-06-03-15-33-02.xlsx",
+    "depot":         r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-06-03-15-33-02.xlsx",
+    "site":          r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsSite2026-06-03-15-33-02.xlsx",
     "slsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
     "clsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
-    "subject_visit": None,#"../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Visit Summary2026-05-06-15-33-02.xlsx",
+    "subject_visit": "../fixtures/sample_csvs/AFFIRM CB8025-41837_Subject Visit Summary2026-06-03-15-33-02.xlsx",
 }
 
 # Date folder string — the extract date stamped on the source files

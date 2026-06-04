@@ -264,6 +264,8 @@ CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`reconci
     `Onhand_Quantity`               DOUBLE,
     `Allocated_Quantity`            DOUBLE,
     `Available_To_Reserve_Quantity` DOUBLE,
+    `3PL_Quantity`                  DOUBLE,
+    `3PL_Converted_Quantity`        DOUBLE,
     `Primary_UOM`                   STRING,
     `3PL_UOM`                       STRING,
     `3PL`                           STRING,

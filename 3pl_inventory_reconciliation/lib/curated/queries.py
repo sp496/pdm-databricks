@@ -1,27 +1,35 @@
 from textwrap import dedent
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Optional
 
 
-def get_clinical_inventory_query(inventory_orgs: Iterable[str], data_source: str = "spark") -> str:
+def get_clinical_inventory_query(inventory_orgs: Optional[Iterable[str]] = None,
+                                 data_source: str = "spark") -> str:
     """Build the EBS clinical inventory staging query.
 
-    Pulls lot-level on-hand inventory from EBS (apps_mtl_* tables) for the
-    given list of inventory orgs, with reservations subtracted to yield an
-    available_quantity per lot.
+    Pulls lot-level on-hand inventory from EBS (apps_mtl_* tables), with
+    reservations subtracted to yield an available_quantity per lot.
 
     Args:
         inventory_orgs: iterable of organization_code values to filter on
             (typically the distinct 3PL plants present in the curated table
-             for the target quarter / segment='clinical').
+             for the target quarter / segment='clinical'). If None, NO org
+            filter is applied and all clinical inventory orgs are returned.
+            If a non-None iterable is supplied it must contain at least one
+            non-empty value (guards against a "discovered zero orgs" bug in
+            the filtered staging path).
         data_source: 'spark' or 'starburst' — kept for parity with get_queries
             (the query body is the same for both).
 
     Returns: a SQL string ready for DataBackend.run_query().
     """
-    orgs = [str(o).strip() for o in inventory_orgs if str(o).strip()]
-    if not orgs:
-        raise ValueError("inventory_orgs must contain at least one non-empty value")
-    orgs_list = ", ".join(f"'{o}'" for o in orgs)
+    if inventory_orgs is None:
+        org_filter = ""
+    else:
+        orgs = [str(o).strip() for o in inventory_orgs if str(o).strip()]
+        if not orgs:
+            raise ValueError("inventory_orgs must contain at least one non-empty value")
+        orgs_list = ", ".join(f"'{o}'" for o in orgs)
+        org_filter = f"\n        WHERE inv.inventory_org IN ({orgs_list})"
 
     return dedent(f"""
         WITH inventory AS (
@@ -128,8 +136,7 @@ def get_clinical_inventory_query(inventory_orgs: Iterable[str], data_source: str
         LEFT JOIN reserve res
             ON inv.inventory_item_id = res.inventory_item_id
            AND inv.organization_id   = res.organization_id
-           AND inv.lot_number        = res.lot_number
-        WHERE inv.inventory_org IN ({orgs_list})
+           AND inv.lot_number        = res.lot_number{org_filter}
     """).strip()
 
 

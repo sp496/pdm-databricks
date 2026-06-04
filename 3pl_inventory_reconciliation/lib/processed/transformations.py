@@ -89,7 +89,7 @@ def process_commercial(
     )
 
     # ----- Outer merge -----
-    # (SAP is pre-filtered to relevant plants by write_inventory_tables before
+    # (SAP is pre-filtered to relevant plants by stage_sap_report before
     # being written to the sap_report Delta table, so no additional filter here.)
     combined_df = curated_df.merge(
         sap_df,
@@ -196,6 +196,9 @@ _CLINICAL_OUTPUT_COLUMNS = [
     "Onhand_Quantity",
     "Allocated_Quantity",
     "Available_To_Reserve_Quantity",
+    # Curated 3PL (depot) quantities
+    "3PL_Quantity",
+    "3PL_Converted_Quantity",
     # Units
     "Primary_UOM",             # EBS primary_uom, renamed for unambiguous pairing
     "3PL_UOM",
@@ -220,9 +223,8 @@ _CLINICAL_OUTPUT_COLUMNS = [
     "Effective_Batch_Number",
 ]
 # Notes:
-# - 3PL_Quantity and 3PL_Converted_Quantity are intentionally NOT included
-#   ("Depot Inventory" deferred until the manual report's calculation logic
-#   is confirmed).
+# - 3PL_Quantity and 3PL_Converted_Quantity carry the curated 3PL ("Depot
+#   Inventory") quantities; NULL on EBS-only rows.
 # - Item_Description and Material_Description are kept side-by-side with no
 #   fillna/fallback — the two source systems remain visible. On EBS-only
 #   rows Material_Description is NULL; on curated-only rows Item_Description
@@ -267,7 +269,7 @@ def process_clinical(
 
     # ----- Full outer merge -----
     # (EBS is pre-filtered to relevant inventory orgs by the SQL query in
-    # write_inventory_tables before being written to ebs_clinical_inventory,
+    # stage_clinical_inventory before being written to ebs_clinical_inventory,
     # so no additional org filter is applied here.)
     combined_df = curated_df.merge(
         ebs_df,

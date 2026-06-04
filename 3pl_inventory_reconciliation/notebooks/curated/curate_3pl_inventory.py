@@ -122,8 +122,8 @@ for segment in segments:
     # Resolve quarter — detected from the SOURCE landing (the authoritative
     # "which quarter are we on"). The raw layer is still read for the actual
     # CSV data below, but quarter detection no longer scans it — keeping all
-    # curated-layer notebooks consistent (write_mapping_tables and
-    # write_inventory_tables also detect from source).
+    # curated-layer notebooks consistent (write_mapping_tables,
+    # stage_sap_report and stage_clinical_inventory also detect from source).
     # ------------------------------------------------------------------
     if run_mode == "historical":
         print(f"  Using historical: year={year}, quarter={quarter}")

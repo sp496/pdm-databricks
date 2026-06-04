@@ -70,7 +70,7 @@ def load_sap_report_file(path: str) -> pd.DataFrame:
     """Read a SAP report CSV and apply the standard column-name cleanup.
 
     Used by:
-      - notebooks/curated/write_inventory_tables.py (direct caller)
+      - notebooks/curated/stage_sap_report.py (direct caller)
       - load_file_mappings (internal — kept for backwards compatibility;
         the SAP path through that loader is no longer exercised by any
         in-tree notebook).

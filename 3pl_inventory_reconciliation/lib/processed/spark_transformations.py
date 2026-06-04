@@ -102,7 +102,7 @@ def process_commercial_spark(
     )
 
     # ------------------------------------------------------------------
-    # SAP is pre-filtered to relevant plants by write_inventory_tables
+    # SAP is pre-filtered to relevant plants by stage_sap_report
     # before being written to the sap_report Delta table, so no additional
     # plant filter is applied here.
     # ------------------------------------------------------------------

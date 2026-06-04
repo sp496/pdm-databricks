@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class Constants:
     """Constants used throughout the data curation process."""
-    STUDY_PROTOCOL_PATTERN = r'GS-US-\d+-\d+(?:-\d+)?(?:_[A-Z](?![a-zA-Z]))?'# = r'GS-US-\d+-\d+(?:-\d+_\d+)?|EDGE-Lung'
+    STUDY_PROTOCOL_PATTERN = r'GS-US-\d+-\d+(?:-\d+)?(?:_[A-Z](?![a-zA-Z]))?|AFFIRM CB8025-41837' #= r'GS-US-\d+-\d+(?:-\d+_\d+)?|EDGE-Lung'
     DATE_FOLDER_FORMAT = "%Y%m%d"
     INPUT_DATE_FORMATS = ['%d-%b-%Y', '%d %b %Y']  # Support multiple date formats
     OUTPUT_DATE_FORMAT = '%Y-%m-%d'
@@ -289,8 +289,8 @@ class DataCurator:
         """
         Assemble a unified subject-visit DataFrame from two source DataFrames.
 
-        Reduces visit_df to the latest visit per subject per drug, joins
-        patient-level fields from subject_df, and maps sites to depots
+        Starts with subject_df as the base and enriches it with the latest
+        visit per subject per drug from visit_df, then maps sites to depots
         via self.site_depot_mapping_df.
 
         Returns:
@@ -299,35 +299,34 @@ class DataCurator:
         if self.site_depot_mapping_df is None:
             raise ValueError("site_depot_mapping_df must be provided to DataCurator for subject-visit assembly")
         site_depot_df = self.site_depot_mapping_df
+
         visit_df = visit_df.copy()
         visit_df['Visit Date'] = pd.to_datetime(visit_df['Visit Date'], dayfirst=True, errors='coerce')
 
-        latest = (
+        visit_cols = ['Subject Number', 'Visit', 'Visit Date', 'Unblinded Drug Description',
+                      'Finished Lot', 'Expiration Date', 'Quantity Dispensed', 'Visit Dose',
+                      'Drug Code', 'Drugs Assigned', 'FP Number', 'Dose Hold', 'PI Last Name']
+        latest_visits = (
             visit_df
-            .sort_values(['Subject Number', 'Drug Description', 'Visit Date'])
-            .groupby(['Subject Number', 'Drug Description'], as_index=False)
+            .sort_values(['Subject Number', 'Unblinded Drug Description', 'Visit Date'])
+            .groupby(['Subject Number', 'Unblinded Drug Description'], as_index=False)
             .tail(1)
             .reset_index(drop=True)
         )
-        latest = latest.drop(columns=[c for c in ['Gilead Site Number'] if c in latest.columns])
-        latest['Visit Date'] = latest['Visit Date'].dt.strftime('%d-%b-%Y')
+        latest_visits = latest_visits[[c for c in visit_cols if c in latest_visits.columns]]
+        latest_visits['Visit Date'] = latest_visits['Visit Date'].dt.strftime('%d-%b-%Y')
 
-        subject_cols = ['Subject Number', 'Study Protocol', 'Date Randomized', 'Date Discontinued', 'Gilead Site Number']
-        latest = latest.merge(
-            subject_df[[c for c in subject_cols if c in subject_df.columns]],
-            how='left',
-            on=['Subject Number'],
-        )
+        result = subject_df.merge(latest_visits, how='left', on='Subject Number')
 
-        latest = (
-            latest
-            .merge(site_depot_df[['Arcus Site', 'Depot']], how='left', left_on='Arcus Site ID', right_on='Arcus Site')
+        result = (
+            result
+            .merge(site_depot_df[['Arcus Site', 'Depot']], how='left', left_on='Site Number', right_on='Arcus Site')
             .rename(columns={'Depot': 'Parent Depot'})
             .drop(columns=['Arcus Site'], errors='ignore')
         )
 
-        logger.info(f"Assembled subject-visit data: {latest.shape[0]} rows, {latest.shape[1]} columns")
-        return latest
+        logger.info(f"Assembled subject-visit data: {result.shape[0]} rows, {result.shape[1]} columns")
+        return result
 
     def assemble_site_data(
         self,
@@ -355,8 +354,8 @@ class DataCurator:
         }
 
         groupby_cols = [
-            'Arcus Site Number', 'Gilead Site Number', 'PI Last Name', 'PCI Item Number Lot', 'Drug Description',
-            'Drug Code', 'Finished Lot', 'Expiration Date', 'Country', 'Parent Depot'
+            'Site Number', 'Site Name', 'PI Last Name', 'Drug Code', 'Unblinded Drug Description',
+            'Country', 'Parent Depot'
         ]
 
         quantity_columns = [
@@ -371,17 +370,17 @@ class DataCurator:
         df = (
             site_df
             .merge(
-                site_depot_df[['Arcus Site', 'Depot', 'Depot Country']],
+                site_depot_df[['Gilead Site', 'Depot', 'Depot Country']],
                 how='left',
-                left_on='Arcus Site Number',
-                right_on='Arcus Site',
+                left_on='Site Number',
+                right_on='Gilead Site',
             )
             .rename(columns={'Depot': 'Parent Depot', 'Depot Country': 'Country'})
-            .drop(columns=['Arcus Site'], errors='ignore')
+            .drop(columns=['Gilead Site'], errors='ignore')
         )
 
         # Step 2: clean
-        df = df.dropna(subset=['Arcus Site Number', 'Quantity (Site Units)', 'Drug Status'])
+        df = df.dropna(subset=['Site Number', 'Quantity (Site Units)', 'Drug Status'])
         df['Quantity (Site Units)'] = (
             pd.to_numeric(df['Quantity (Site Units)'], errors='coerce')
             .fillna(0)
@@ -433,8 +432,7 @@ class DataCurator:
         }
 
         groupby_cols = [
-            'Depot Number', 'Depot Name', 'Drug Description', 'Drug Code', 'PCI Item Number Lot',
-            'Finished Lot', 'Expiration Date', 'Country',
+            'Depot Number', 'Depot Name', 'Drug Code', 'Unblinded Drug Description', 'Country',
         ]
 
         quantity_columns = [

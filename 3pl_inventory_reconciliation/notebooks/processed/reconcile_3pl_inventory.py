@@ -248,6 +248,8 @@ def finalise_and_write_clinical(combined_df: pd.DataFrame, target_table: str, ye
         col("Onhand_Quantity").cast(DoubleType()),
         col("Allocated_Quantity").cast(DoubleType()),
         col("Available_To_Reserve_Quantity").cast(DoubleType()),
+        col("3PL_Quantity").cast(DoubleType()),
+        col("3PL_Converted_Quantity").cast(DoubleType()),
         col("Primary_UOM").cast(StringType()),
         col("3PL_UOM").cast(StringType()),
         col("3PL").cast(StringType()),
