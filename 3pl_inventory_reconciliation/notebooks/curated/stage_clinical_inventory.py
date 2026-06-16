@@ -13,10 +13,14 @@
 # MAGIC run it on its own (roughly quarterly) cadence rather than on every
 # MAGIC reconciliation run.
 # MAGIC
-# MAGIC Inventory orgs are discovered from the SOURCE-landing site_id folders
-# MAGIC (`{src}/clinical/{year}/{quarter}/3pl_files/{site_id}/`). This notebook
-# MAGIC reads no raw-layer data at all (it queries EBS live), so it depends on
-# MAGIC neither the raw layer nor the curated table.
+# MAGIC Inventory orgs are discovered from the CURATED clinical table — the
+# MAGIC distinct `3PL` values for this Segment/Year/Quarter. Source folder names
+# MAGIC are no longer the source of truth for orgs: facility-mapped files (e.g.
+# MAGIC `almac`) carry a non-plant folder name and resolve their real plant per
+# MAGIC row at curation time, so the authoritative org list lives in the curated
+# MAGIC table. This notebook therefore DEPENDS on the curated table being
+# MAGIC populated for the quarter (run it after curate_3pl_inventory); it still
+# MAGIC reads no raw-layer data and queries EBS live.
 
 # COMMAND ----------
 
@@ -33,10 +37,7 @@ sys.path.extend([project_root, repo_root])
 import pandas as pd
 
 from lib.curated.queries import get_clinical_inventory_query
-from lib.discovery import (
-    get_latest_completed_quarter,
-    discover_3pl_files,
-)
+from lib.discovery import get_latest_completed_quarter
 from common.backends import DataBackend
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
@@ -67,12 +68,14 @@ resolved_env = "prod" if env == "prd" else env
 src_root = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
 
 ebs_clinical_inventory_table = curated_cfg["ebs_clinical_inventory_table"].format(env=env)
+curated_table                = curated_cfg["curated_table"].format(env=env)
 
 run_config = curated_cfg["run_config"]
 run_mode   = run_config["run_mode"]
 
 print(f"Source root                 : {src_root}")
 print(f"EBS clinical inventory table: {ebs_clinical_inventory_table}")
+print(f"Curated table               : {curated_table}")
 print(f"Run mode                    : {run_mode}")
 
 if run_mode == "historical":
@@ -127,22 +130,35 @@ else:
         )
     print(f"  Auto-detected latest completed quarter: year={year_l}, quarter={quarter_l}")
 
-src_quarter_root_l = f"{segment_src_root_l}/{year_l}/{quarter_l}"
+# Discover inventory orgs from the CURATED clinical table — the distinct,
+# non-null `3PL` values for this Segment/Year/Quarter. This is the post-curation
+# org list, so facility-mapped files (e.g. `almac`, whose folder name is not a
+# plant) contribute their per-row resolved plants rather than the folder token.
+if not spark.catalog.tableExists(curated_table):
+    raise ValueError(
+        f"Curated table {curated_table} does not exist — run curate_3pl_inventory "
+        f"for {year_l}/{quarter_l} before staging clinical EBS inventory"
+    )
 
-# Discover inventory orgs from SOURCE-landing site_id folders (folder
-# enumeration only — no raw-layer data is read in this notebook).
-files_by_site  = discover_3pl_files(dbutils, src_quarter_root_l)
+curated_orgs_df = (
+    spark.table(curated_table)
+    .filter(f"Segment = '{segment_l}' AND Year = '{year_l}' AND Quarter = '{quarter_l}'")
+    .select("3PL")
+    .distinct()
+    .toPandas()
+)
 inventory_orgs = sorted(
-    {str(k).strip() for k in files_by_site.keys() if str(k).strip()}
+    {str(o).strip() for o in curated_orgs_df["3PL"].dropna() if str(o).strip()}
 )
 print(
-    f"  Discovered {len(inventory_orgs)} clinical inventory org(s) "
-    f"under {src_quarter_root_l}: {inventory_orgs}"
+    f"  Discovered {len(inventory_orgs)} clinical inventory org(s) from "
+    f"{curated_table} ({segment_l}/{year_l}/{quarter_l}): {inventory_orgs}"
 )
 if not inventory_orgs:
     raise ValueError(
-        f"No clinical plant directories found under "
-        f"{src_quarter_root_l}/3pl_files — ensure clinical source files are landed"
+        f"No clinical orgs found in {curated_table} for "
+        f"{segment_l}/{year_l}/{quarter_l} — ensure curate_3pl_inventory ran for "
+        f"this quarter and produced clinical rows with a resolved 3PL"
     )
 
 # Run EBS query

@@ -23,12 +23,19 @@ def find_table_boundaries(df, expected_columns):
         print("Error: DataFrame is empty.")
         return None
 
-    # Drop columns that are entirely null (trim trailing blank columns)
+    # Trim trailing blank columns: drop the first all-null column (and
+    # everything to its right) that appears *after* real data has started.
+    # Leading all-null columns are left intact — the start_col logic below
+    # skips them when locating the header.
+    seen_data = False
     for col_name in df.columns:
         if df[col_name].isnull().all():
-            col_index = df.columns.get_loc(col_name)
-            df = df.iloc[:, :col_index].copy()
-            break
+            if seen_data:
+                col_index = df.columns.get_loc(col_name)
+                df = df.iloc[:, :col_index].copy()
+                break
+        else:
+            seen_data = True
 
     expected_columns = [col.lower() for col in expected_columns]
 

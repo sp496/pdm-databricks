@@ -88,9 +88,11 @@ def process_commercial(
         )
     )
 
+    # ----- Filter SAP to plants present in the curated table for this partition -----
+    plant_numbers = curated_df["3PL"].astype(str).unique()
+    sap_df = sap_df[sap_df["Plant"].astype(str).isin(plant_numbers)]
+
     # ----- Outer merge -----
-    # (SAP is pre-filtered to relevant plants by stage_sap_report before
-    # being written to the sap_report Delta table, so no additional filter here.)
     combined_df = curated_df.merge(
         sap_df,
         how="outer",
@@ -267,10 +269,11 @@ def process_clinical(
         )
     )
 
+    # ----- Filter EBS to inventory orgs present in the curated table for this partition -----
+    plant_numbers = curated_df["3PL"].astype(str).unique()
+    ebs_df = ebs_df[ebs_df["inventory_org"].astype(str).isin(plant_numbers)]
+
     # ----- Full outer merge -----
-    # (EBS is pre-filtered to relevant inventory orgs by the SQL query in
-    # stage_clinical_inventory before being written to ebs_clinical_inventory,
-    # so no additional org filter is applied here.)
     combined_df = curated_df.merge(
         ebs_df,
         how="outer",
@@ -332,5 +335,10 @@ def process_clinical(
         "available_quantity":   "Available_To_Reserve_Quantity",
         "3PL_Classification":   "Plant_Classification",
     })
+
+    # ----- 3PL_Name fallback for EBS-only rows -----
+    # EBS-only rows have no curated match, so 3PL_Name is null. Fall back to
+    # the EBS Inventory_Org_Name so every row carries a human-readable name.
+    combined_df["3PL_Name"] = combined_df["3PL_Name"].fillna(combined_df["Inventory_Org_Name"])
 
     return combined_df[_CLINICAL_OUTPUT_COLUMNS]

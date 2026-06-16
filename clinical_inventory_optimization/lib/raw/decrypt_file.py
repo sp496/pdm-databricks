@@ -228,13 +228,13 @@ class AESDecryptor:
 
 # Example 1: Single file decryption
 if __name__ == "__main__":
-    key = ""
+    key = "xpnCLyFMwCPEddWNQGoFEcavwPLEKoV6fELNgyh/dqo="
 
     decryptor = AESDecryptor(key, debug=False)
 
     # output_path is optional — extension is auto-detected from decrypted content
     result = decryptor.decrypt_file(
-        "GS-US-592-6173 CustomReport4_SubjectSummary_04-Sep-2025_100250_extcsv.enc"
+        "AFFIRM CB8025-41837_UNBLINDED Inventory LevelsDepot2026-06-05-10-12-15.enc"
     )
 
     print(f"\nDecryption result: {result}")

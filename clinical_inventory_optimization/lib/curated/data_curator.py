@@ -320,9 +320,9 @@ class DataCurator:
 
         result = (
             result
-            .merge(site_depot_df[['Arcus Site', 'Depot']], how='left', left_on='Site Number', right_on='Arcus Site')
+            .merge(site_depot_df[['Gilead Site', 'Depot']], how='left', left_on='Site Number', right_on='Gilead Site')
             .rename(columns={'Depot': 'Parent Depot'})
-            .drop(columns=['Arcus Site'], errors='ignore')
+            .drop(columns=['Gilead Site'], errors='ignore')
         )
 
         logger.info(f"Assembled subject-visit data: {result.shape[0]} rows, {result.shape[1]} columns")
@@ -355,7 +355,7 @@ class DataCurator:
 
         groupby_cols = [
             'Site Number', 'Site Name', 'PI Last Name', 'Drug Code', 'Unblinded Drug Description',
-            'Country', 'Parent Depot'
+            'Finished Lot', 'Expiration Date', 'FP Number', 'Country', 'Parent Depot'
         ]
 
         quantity_columns = [
@@ -389,7 +389,7 @@ class DataCurator:
 
         # Step 3: pivot Drug Status → quantity columns
         result_list = []
-        for name, group in df.groupby(groupby_cols):
+        for name, group in df.groupby(groupby_cols, dropna=False):
             row_dict = dict(zip(groupby_cols, name))
             for q_col in quantity_columns:
                 row_dict[q_col] = 0
@@ -432,7 +432,8 @@ class DataCurator:
         }
 
         groupby_cols = [
-            'Depot Number', 'Depot Name', 'Drug Code', 'Unblinded Drug Description', 'Country',
+            'Depot Number', 'Depot Name', 'Drug Code', 'Unblinded Drug Description',
+            'Finished Lot', 'Expiration Date', 'FP Number', 'Label Group', 'Country',
         ]
 
         quantity_columns = [
@@ -462,7 +463,7 @@ class DataCurator:
         )
 
         result_list = []
-        for name, group in df.groupby(groupby_cols):
+        for name, group in df.groupby(groupby_cols, dropna=False):
             row_dict = dict(zip(groupby_cols, name))
             for q_col in quantity_columns:
                 row_dict[q_col] = 0

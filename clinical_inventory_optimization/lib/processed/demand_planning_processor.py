@@ -30,7 +30,7 @@ class CycleInfo:
 @dataclass
 class ProjectedVisit:
     """Represents a projected future visit"""
-    subject_number: int
+    subject_number: str
     drug_dispensed: str
     cycle_number: int
     cycle_day: int
@@ -52,7 +52,7 @@ class Config:
     # OUTPUT_FILE = "test_scenarios/01_simple_single_drug/demand_forecast.csv"
 
     SUBJECT_SUMMARY_FILE = "clinical_subject_summary.csv"
-    TREATMENT_MAPPING_FILE = "treatment_group_mapping_.csv"
+    TREATMENT_MAPPING_FILE = "treatment_group_mapping.csv"
     OUTPUT_FILE = "demand_forecast.csv"
 
     # Column mappings for standardization
@@ -358,6 +358,9 @@ class VisitProjector:
             if pd.isna(last_visit_date):
                 return []
 
+            # subject_number is a string (e.g. '620-501'); keep as-is, do not cast to int.
+            subject_num = str(row['subject_number'])
+
             # Get dispensing frequency and validate
             dispensing_frequency = row.get('dispensing_frequency_days', 28)
             if pd.isna(dispensing_frequency):
@@ -427,7 +430,7 @@ class VisitProjector:
                     recorded_forecast_str = f"{prefix}Cycle {current_cycle_number} Day {day}"
 
                     projected_visit = ProjectedVisit(
-                        subject_number=int(row['subject_number']),
+                        subject_number=subject_num,
                         drug_dispensed=row['drug_dispensed'],
                         cycle_number=current_cycle_number,
                         cycle_day=day,
@@ -488,7 +491,7 @@ class VisitProjector:
                         recorded_forecast_str = f"{prefix}Cycle {current_projected_cycle} Day {day}"
 
                         projected_visit = ProjectedVisit(
-                            subject_number=int(row['subject_number']),
+                            subject_number=subject_num,
                             drug_dispensed=row['drug_dispensed'],
                             cycle_number=current_projected_cycle,
                             cycle_day=day,

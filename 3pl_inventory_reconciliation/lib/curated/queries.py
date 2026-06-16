@@ -244,7 +244,11 @@ def get_queries(q_end_date: str, data_source: str = "spark") -> Dict[str, str]:
         'lot_no_master': dedent("""
             SELECT DISTINCT
                 matnr,
-                charg
+                charg,
+                CASE
+                    WHEN regexp_replace(charg, '^0+', '') = '' THEN charg
+                    ELSE regexp_replace(charg, '^0+', '')
+                END AS charg_stripped
             FROM
                 pdm_raw_saphana_ptd.default_s4h_hana_mch1
             WHERE

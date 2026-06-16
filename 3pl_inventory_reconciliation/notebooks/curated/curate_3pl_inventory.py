@@ -65,7 +65,8 @@ resolved_env  = "prod" if env == "prd" else env
 src_root      = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
 raw_root      = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
 ref_base      = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['ref_data_dir']}"
-curated_table = curated_cfg["curated_table"].format(env=env)
+curated_table    = curated_cfg["curated_table"].format(env=env)
+sap_report_table = curated_cfg["sap_report_table"].format(env=env)
 segments   = curated_cfg["segments"]
 run_config = curated_cfg["run_config"]
 run_mode   = run_config["run_mode"]
@@ -151,10 +152,13 @@ for segment in segments:
     # Build mapping file paths and load cache
     # ------------------------------------------------------------------
     file_paths = MappingFilePaths(
-        mapping_file_path         = dbfs_path(mapping_path),
-        header_mapping_sheet_name = "Header Mapping",
-        item_mapping_sheet_name   = "Item Mapping",
-        uom_mapping_sheet_name    = "UOM Mapping",
+        mapping_file_path           = dbfs_path(mapping_path),
+        header_mapping_sheet_name   = "Header Mapping",
+        item_mapping_sheet_name     = "Item Mapping",
+        uom_mapping_sheet_name      = "UOM Mapping",
+        # Clinical almac workbook carries this; commercial workbooks don't —
+        # the guarded load yields None when the sheet is absent.
+        facility_mapping_sheet_name = "Facility Mapping",
     )
 
     # Reference-data fallback CSVs. Clinical pulls EBS-sourced datasets (no
@@ -195,6 +199,24 @@ for segment in segments:
     print(f"Header mapping built — {len(mapping_cache.header_mapping)} site/sheet key(s): {sorted(mapping_cache.header_mapping.keys())}")
 
     # ------------------------------------------------------------------
+    # Load SAP plant lookup (commercial only) for multi-plant folders.
+    # Combined folders like "1696_1664_1635" need the SAP report to resolve
+    # the real plant per row. Clinical files never use this.
+    # ------------------------------------------------------------------
+    sap_plant_df = None
+    if segment == "commercial":
+        # Carry Stock_Quantity__Base_UOM_ (no .distinct) so resolve_plants_from_sap
+        # can sum per-plant stock and split a multi-plant combo's 3PL quantity
+        # by each plant's SAP fraction.
+        sap_plant_df = (
+            spark.table(sap_report_table)
+            .filter(f"Segment = 'commercial' AND Year = '{year}' AND Quarter = '{quarter}'")
+            .select("Plant", "Material_Number", "Batch_Number", "Stock_Quantity__Base_UOM_")
+            .toPandas()
+        )
+        print(f"SAP plant lookup loaded — {len(sap_plant_df)} (Plant, Material, Batch, Qty) rows")
+
+    # ------------------------------------------------------------------
     # Discover and process raw CSV files
     # NOTE: the curated layer genuinely consumes the raw layer's output here
     # — these are the cleaned per-site CSVs produced by ingest_3pl_inventory.
@@ -211,7 +233,7 @@ for segment in segments:
             print(f"    Source: {os.path.basename(raw_path)}")
             try:
                 raw_df     = pd.read_csv(dbfs_path(raw_path), dtype=str)
-                curated_df = curated_processing(raw_df, raw_path, mapping_cache, segment)
+                curated_df = curated_processing(raw_df, raw_path, mapping_cache, segment, sap_plant_df)
                 all_curated_dfs.append(curated_df)
                 print(f"    Processed {curated_df.shape[0]} rows")
             except Exception as e:

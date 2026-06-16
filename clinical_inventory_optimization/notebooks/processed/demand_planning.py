@@ -68,7 +68,7 @@ schema_mapping = {
     "study_name": StringType(),
     "parent_depot": IntegerType(),
     "site_id": IntegerType(),
-    "subject_number": IntegerType(),
+    "subject_number": StringType(),
     "subject_status": StringType(),
     "subject_country": StringType(),
     "randomized_treatment": StringType(),

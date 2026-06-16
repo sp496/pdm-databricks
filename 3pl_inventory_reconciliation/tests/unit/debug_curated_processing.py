@@ -51,7 +51,7 @@ for _p in [_REPO_ROOT, _PROJECT_ROOT]:
 
 import pandas as pd
 
-from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_files
+from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_files, load_sap_report_file
 from lib.curated.transformations import curated_processing
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -68,25 +68,36 @@ _OUTPUTS_DIR  = os.path.join(_TESTS_DIR, "outputs", "curated")
 YEAR    = "2026"
 QUARTER = "Q1"
 SEGMENT = "clinical"
-SITE_ID = "183"   # must match folder name AND the 3PL column in the mapping Excel
+SITE_ID = 'Almac'   # must match folder name AND the 3PL column in the mapping Excel
 
 FILE_PATHS = MappingFilePaths(
-    mapping_file_path         = os.path.join(_FIXTURES_DIR, "mapping_2026_Q1_clinical.xlsx"),
-    header_mapping_sheet_name = "Header Mapping",
-    item_mapping_sheet_name   = "Item Mapping",
-    uom_mapping_sheet_name    = "UOM Mapping",
-    sap_report_file_path      = os.path.join(_FIXTURES_DIR, "sap_report.csv"),
+    mapping_file_path           = os.path.join(_FIXTURES_DIR, "mapping_2026_Q1_clinical.xlsx"),
+    header_mapping_sheet_name   = "Header Mapping",
+    item_mapping_sheet_name     = "Item Mapping",
+    uom_mapping_sheet_name      = "UOM Mapping",
+    facility_mapping_sheet_name = "Facility Mapping",
+    sap_report_file_path        = os.path.join(_FIXTURES_DIR, "WRTRR1226 - Inventory Quantity - Q1 2026.csv"),
 )
 
+# REF_PATHS = RefFilePaths(
+#     plant_name_mapping_file_path   = os.path.join(_CURATED_DIR, "plant_name_mapping.csv"),
+#     material_master_file_path      = os.path.join(_CURATED_DIR, "material_master.csv"),
+#     lot_no_master_file_path        = os.path.join(_CURATED_DIR, "lot_no_master.csv"),
+#     lot_no_mapping_file_path       = os.path.join(_CURATED_DIR, "lot_no_mapping.csv"),
+#     material_description_file_path = os.path.join(_CURATED_DIR, "material_description.csv"),
+#     uom_master_file_path           = os.path.join(_CURATED_DIR, "uom_master.csv"),
+#     unit_cost_file_path            = os.path.join(_CURATED_DIR, "unit_cost.csv"),
+#     material_type_file_path        = os.path.join(_CURATED_DIR, "material_type.csv"),
+# )
+
 REF_PATHS = RefFilePaths(
-    plant_name_mapping_file_path   = os.path.join(_CURATED_DIR, "plant_name_mapping.csv"),
-    material_master_file_path      = os.path.join(_CURATED_DIR, "material_master.csv"),
-    lot_no_master_file_path        = os.path.join(_CURATED_DIR, "lot_no_master.csv"),
-    lot_no_mapping_file_path       = os.path.join(_CURATED_DIR, "lot_no_mapping.csv"),
-    material_description_file_path = os.path.join(_CURATED_DIR, "material_description.csv"),
-    uom_master_file_path           = os.path.join(_CURATED_DIR, "uom_master.csv"),
-    unit_cost_file_path            = os.path.join(_CURATED_DIR, "unit_cost.csv"),
-    material_type_file_path        = os.path.join(_CURATED_DIR, "material_type.csv"),
+    plant_name_mapping_file_path   = os.path.join(_CURATED_DIR, "clinical_plant_name_mapping.csv"),
+    material_master_file_path      = os.path.join(_CURATED_DIR, "clinical_material_master.csv"),
+    lot_no_master_file_path        = os.path.join(_CURATED_DIR, "clinical_lot_no_master.csv"),
+    lot_no_mapping_file_path       = os.path.join(_CURATED_DIR, "clinical_lot_no_mapping.csv"),
+    material_description_file_path = os.path.join(_CURATED_DIR, "clinical_material_description.csv"),
+    uom_master_file_path           = os.path.join(_CURATED_DIR, "clinical_uom_master.csv"),
+    material_type_file_path        = os.path.join(_CURATED_DIR, "clinical_material_type.csv"),
 )
 
 # Root of the raw fixture tree — CSVs live at:
@@ -185,6 +196,16 @@ def main():
     logger.info(f"Header mapping built — {len(cache.header_mapping)} key(s): {sorted(cache.header_mapping.keys())}\n")
 
     # ------------------------------------------------------------------
+    # Build the SAP plant lookup (commercial only) for multi-plant folders.
+    # Mirrors the notebook: distinct (Plant, Material_Number, Batch_Number).
+    # ------------------------------------------------------------------
+    sap_plant_df = None
+    if SEGMENT == "commercial" and FILE_PATHS.sap_report_file_path and os.path.exists(FILE_PATHS.sap_report_file_path):
+        sap_full = load_sap_report_file(FILE_PATHS.sap_report_file_path)
+        sap_plant_df = sap_full[["Plant", "Material_Number", "Batch_Number", "Stock_Quantity__Base_UOM_"]]
+        logger.info(f"SAP plant lookup: {len(sap_plant_df)} (Plant, Material, Batch, Qty) rows\n")
+
+    # ------------------------------------------------------------------
     # Process each CSV
     # ------------------------------------------------------------------
     os.makedirs(_OUTPUTS_DIR, exist_ok=True)
@@ -199,7 +220,7 @@ def main():
 
         try:
             raw_df     = pd.read_csv(raw_path, dtype=str)
-            curated_df = curated_processing(raw_df, raw_path, cache, SEGMENT)
+            curated_df = curated_processing(raw_df, raw_path, cache, SEGMENT, sap_plant_df)
             curated_df.to_csv(out_path, index=False)
             logger.info(f"Output: {out_path}")
             _print_df_summary(file_stem, curated_df)

@@ -26,6 +26,9 @@ class MappingFilePaths:
     item_mapping_sheet_name: str
     uom_mapping_sheet_name: str
     sap_report_file_path: Optional[str] = None
+    # Optional Facility->Plant Number sheet (clinical only, e.g. almac files).
+    # When the workbook lacks this sheet (commercial), the guarded load yields None.
+    facility_mapping_sheet_name: Optional[str] = None
 
 
 @dataclass
@@ -60,6 +63,7 @@ class MappingDataCache:
         self.lot_no_mapping_lookup = None  # {matnr: [(atwrt, charg), ...]} — built once from lot_no_mapping_df
         self.sap_report_df = None
         self.uom_mapping_df = None
+        self.facility_mapping_df = None   # Facility->Plant Number (clinical almac); None when absent
         self.uom_master_df = None
         self.unit_cost_df = None
         self.material_type_df = None
@@ -133,7 +137,7 @@ def build_header_mapping(header_mapping_df: pd.DataFrame) -> dict:
     hdf["3PL_Column_Header"] = (
         hdf["3PL_Column_Header"].str.lower().str.strip().str.replace(r"\s+", " ", regex=True)
     )
-    hdf["3PL"] = hdf["3PL"].astype("int").astype("str")
+    hdf["3PL"] = hdf["3PL"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
     hdf["combined_key"] = hdf.apply(
         lambda row: (
             f"{row['3PL']}_{row['Sheet_Name'].replace(' ', '_')}"
@@ -220,6 +224,19 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
     except Exception as e:
         print(f"\tFailed to load UOM Mappings: {e}")
         raise
+
+    # Optional Facility->Plant Number sheet (clinical almac). Guarded: a workbook
+    # without this sheet (commercial) leaves facility_mapping_df = None.
+    if file_paths.facility_mapping_sheet_name:
+        try:
+            cache.facility_mapping_df = _load_sheet(
+                file_paths.mapping_file_path,
+                file_paths.facility_mapping_sheet_name,
+            )
+            print(f"\tLoaded Facility Mapping ({len(cache.facility_mapping_df)} rows)")
+        except Exception as e:
+            print(f"\tNo Facility Mapping sheet — skipping ({e.__class__.__name__})")
+            cache.facility_mapping_df = None
 
     print("\tLoading SAP report...")
     if not file_paths.sap_report_file_path:
