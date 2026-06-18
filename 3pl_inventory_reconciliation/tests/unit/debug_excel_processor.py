@@ -50,7 +50,7 @@ SAMPLE_FILE        = os.path.join(_SAMPLE_DIR, "1697-snapshot.xlsx")
 SITE_ID            = "1697"
 SEGMENT            = "commercial"
 
-MAPPING_FILE       = os.path.join(_FIXTURES_DIR, "mapping_2026_Q1.xlsx")
+MAPPING_FILE       = os.path.join(_FIXTURES_DIR, "3PL_commercial_mapping_2026_Q1.xlsx")
 MAPPING_SHEET_NAME = "Header Mapping"
 
 SAP_FILE           = os.path.join(_FIXTURES_DIR, "sap_file.xlsx")  # set to an xlsx path to also test process_sap_file

@@ -25,7 +25,7 @@ Fallback files expected in tests/fixtures/curated/
   sap_report.csv
 
 Mapping Excel file (already in tests/fixtures/):
-  mapping_2026_Q1.xlsx
+  3PL_commercial_mapping_2026_Q1.xlsx
 """
 
 import os
@@ -59,7 +59,7 @@ YEAR    = "2026"
 QUARTER = "Q1"
 
 FILE_PATHS = MappingFilePaths(
-    mapping_file_path         = os.path.join(_FIXTURES_DIR, "mapping_2026_Q1.xlsx"),
+    mapping_file_path         = os.path.join(_FIXTURES_DIR, "3PL_commercial_mapping_2026_Q1.xlsx"),
     header_mapping_sheet_name = "Header Mapping",
     item_mapping_sheet_name   = "Item Mapping",
     uom_mapping_sheet_name    = "UOM Mapping",

@@ -2,7 +2,7 @@
 
 Source layout (segment-first):
     {root}/{segment}/{year}/{quarter}/3pl_files/{site_id}/{site_id}_inventory.xlsx
-    {root}/{segment}/{year}/{quarter}/mapping_files/{api|dp}_mapping_{year}_{quarter}.xlsx
+    {root}/{segment}/{year}/{quarter}/mapping_files/3PL_{segment}_mapping_{year}_{quarter}.xlsx
     {root}/{segment}/{year}/{quarter}/sap_report_files/sap_report_{quarter}_{year}.xlsx
 """
 import os
@@ -102,14 +102,15 @@ def discover_3pl_files(dbutils, quarter_root):
     return results
 
 
-def discover_mapping_file(dbutils, quarter_root):
+def discover_mapping_file(dbutils, quarter_root, segment=None):
     """Return the path to the per-quarter mapping workbook, or None.
 
-    Walks `{quarter_root}/mapping_files/` and returns the first file whose
-    basename starts with `mapping_` (case-insensitive), skipping Excel lock
-    files (~$...). The legacy split into `api_mapping_*.xlsx` /
-    `dp_mapping_*.xlsx` is no longer supported — both segments now ship a
-    single per-quarter file named `mapping_{year}_{quarter}.xlsx`.
+    Walks `{quarter_root}/mapping_files/` and returns the first Excel workbook
+    whose basename contains `mapping` (case-insensitive), skipping Excel lock
+    files (~$...). Workbooks are named `3PL_{segment}_mapping_{year}_{quarter}.xlsx`;
+    when `segment` is supplied it must also appear in the basename, which
+    disambiguates if both segments' files ever land in the same directory
+    (`clinical` is not a substring of `commercial`, so they never cross-match).
     """
     mapping_dir = os.path.join(quarter_root, "mapping_files")
     try:
@@ -121,8 +122,12 @@ def discover_mapping_file(dbutils, quarter_root):
         name = os.path.basename(entry.path)
         if name.startswith("~$"):
             continue
-        if name.lower().startswith("mapping_"):
-            return entry.path
+        lname = name.lower()
+        if not lname.endswith((".xlsx", ".xls")) or "mapping" not in lname:
+            continue
+        if segment and segment.lower() not in lname:
+            continue
+        return entry.path
     return None
 
 

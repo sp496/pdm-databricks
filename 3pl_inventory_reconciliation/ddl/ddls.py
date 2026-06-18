@@ -165,9 +165,15 @@ CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`curated
     `Date_Processed`          STRING
 )
 USING DELTA
-PARTITIONED BY (Year, Quarter)
+PARTITIONED BY (Segment, Year, Quarter)
 COMMENT '3PL inventory reconciliation curated layer'
 """)
+# MIGRATION NOTE: curated_3pl_inventory was previously PARTITIONED BY (Year, Quarter).
+# CREATE TABLE IF NOT EXISTS does NOT repartition an existing table. To adopt the
+# (Segment, Year, Quarter) layout used by the per-segment curate notebooks
+# (curate_commercial_inventory / curate_clinical_inventory), drop & recreate this
+# table with the new DDL, then re-run both curate notebooks for each quarter present
+# (the curated layer is fully reproducible from raw + mappings).
 
 # COMMAND ----------
 

@@ -72,7 +72,8 @@ column_mapping = {
     "Visit Days": "visit_days",
     "Dispensing Quantity": "dispensing_quantity",
     "Dispensing Frequency (Days)": "dispensing_frequency_days",
-    "Max Cycles": "max_cycles"
+    "Max Cycles": "max_cycles",
+    "Do Not Ship (Days)": "do_not_ship_days"
 }
 
 # 🧱 Expected schema for casting
@@ -89,7 +90,8 @@ schema_mapping = {
     "visit_days": StringType(),
     "dispensing_quantity": LongType(),
     "dispensing_frequency_days": LongType(),
-    "max_cycles": DoubleType()
+    "max_cycles": DoubleType(),
+    "do_not_ship_days": LongType()
 }
 
 tgm_df = tgm_df[column_mapping.keys()]

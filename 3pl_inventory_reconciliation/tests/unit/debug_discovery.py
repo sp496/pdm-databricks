@@ -19,13 +19,13 @@ Fixture layout (mirrors the real S3 structure — segment-first):
   │       └── Q1/
   │           ├── 3pl_files/
   │           │   └── WRTRR1226/   ← drop any inventory xlsx here
-  │           └── mapping_files/   ← mapping_*.xlsx (single file)
+  │           └── mapping_files/   ← 3PL_{segment}_mapping_*.xlsx (single file)
   └── commercial/
       └── 2026/
           └── Q1/
               ├── 3pl_files/
               │   └── 1205/        ← drop any inventory xlsx here
-              ├── mapping_files/   ← mapping_*.xlsx (single file)
+              ├── mapping_files/   ← 3PL_{segment}_mapping_*.xlsx (single file)
               └── sap_report_files/ ← sap_report_*.xlsx
 """
 
@@ -125,7 +125,7 @@ def main():
         # 2. Discover mapping file
         # -------------------------------------------------------------------
         logger.info("\n--- discover_mapping_file ---")
-        mapping_path = discover_mapping_file(dbutils, quarter_root)
+        mapping_path = discover_mapping_file(dbutils, quarter_root, segment)
         logger.info(f"  mapping={mapping_path}")
 
         # -------------------------------------------------------------------

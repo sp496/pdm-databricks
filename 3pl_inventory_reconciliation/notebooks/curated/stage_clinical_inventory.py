@@ -19,7 +19,7 @@
 # MAGIC `almac`) carry a non-plant folder name and resolve their real plant per
 # MAGIC row at curation time, so the authoritative org list lives in the curated
 # MAGIC table. This notebook therefore DEPENDS on the curated table being
-# MAGIC populated for the quarter (run it after curate_3pl_inventory); it still
+# MAGIC populated for the quarter (run it after curate_clinical_inventory); it still
 # MAGIC reads no raw-layer data and queries EBS live.
 
 # COMMAND ----------
@@ -136,7 +136,7 @@ else:
 # plant) contribute their per-row resolved plants rather than the folder token.
 if not spark.catalog.tableExists(curated_table):
     raise ValueError(
-        f"Curated table {curated_table} does not exist — run curate_3pl_inventory "
+        f"Curated table {curated_table} does not exist — run curate_clinical_inventory "
         f"for {year_l}/{quarter_l} before staging clinical EBS inventory"
     )
 
@@ -157,7 +157,7 @@ print(
 if not inventory_orgs:
     raise ValueError(
         f"No clinical orgs found in {curated_table} for "
-        f"{segment_l}/{year_l}/{quarter_l} — ensure curate_3pl_inventory ran for "
+        f"{segment_l}/{year_l}/{quarter_l} — ensure curate_clinical_inventory ran for "
         f"this quarter and produced clinical rows with a resolved 3PL"
     )
 

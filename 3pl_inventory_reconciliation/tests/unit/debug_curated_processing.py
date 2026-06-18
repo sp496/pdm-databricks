@@ -26,7 +26,7 @@ To generate these CSVs locally, run debug_excel_processor.py first and copy
 its outputs from tests/outputs/raw/ into the structure above.
 
 Reference / mapping files (already in tests/fixtures/):
-  mapping_2026_Q1_clinical.xlsx
+  3PL_clinical_mapping_2026_Q1.xlsx
   sap_report.csv
 
 Fallback CSV files expected in tests/fixtures/curated/
@@ -71,7 +71,7 @@ SEGMENT = "clinical"
 SITE_ID = 'Almac'   # must match folder name AND the 3PL column in the mapping Excel
 
 FILE_PATHS = MappingFilePaths(
-    mapping_file_path           = os.path.join(_FIXTURES_DIR, "mapping_2026_Q1_clinical.xlsx"),
+    mapping_file_path           = os.path.join(_FIXTURES_DIR, "3PL_clinical_mapping_2026_Q1.xlsx"),
     header_mapping_sheet_name   = "Header Mapping",
     item_mapping_sheet_name     = "Item Mapping",
     uom_mapping_sheet_name      = "UOM Mapping",

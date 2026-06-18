@@ -1,0 +1,77 @@
+# Databricks notebook source
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 3PL Inventory — Curated Processing (COMMERCIAL)
+# MAGIC Curates the commercial segment only and writes its own
+# MAGIC `Segment='commercial'` partition of `curated_3pl_inventory`, independent of
+# MAGIC the clinical run. The shared pipeline lives in `lib.curated.pipeline`.
+# MAGIC
+# MAGIC Run the clinical counterpart (`curate_clinical_inventory`) separately.
+# MAGIC
+# MAGIC **DATA_SOURCE:** `spark` in prd, else `starburst` (resolved from DATAENV).
+
+# COMMAND ----------
+
+import os
+import sys
+
+current_dir  = os.getcwd()
+project_root = os.path.dirname(os.path.dirname(current_dir))  # 3pl_inventory_reconciliation
+repo_root    = os.path.dirname(project_root)
+sys.path.extend([project_root, repo_root])
+
+# COMMAND ----------
+
+from lib.curated.pipeline import curate_segment
+from lib.discovery import get_latest_completed_quarter
+from common.config_loader import load_config
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Resolve run context (env, config, data source, quarter)
+
+# COMMAND ----------
+
+segment = "commercial"
+
+env          = dbutils.widgets.get("DATAENV")
+curated_cfg  = load_config(os.path.join(project_root, "config/curated.json"))
+data_source  = "spark" if env == "prd" else "starburst"
+resolved_env = "prod" if env == "prd" else env
+
+starburst_config = None
+if data_source == "starburst":
+    starburst_config = {
+        "base_url"        : "jdbc:trino://query.gilead.com:443",
+        "username"        : dbutils.secrets.get(scope="pdm-gsc", key="starburst-username"),
+        "password"        : dbutils.secrets.get(scope="pdm-gsc", key="starburst-password"),
+        "default_catalog" : "pdm",
+        "default_schema"  : "default",
+    }
+
+# Resolve the target quarter from the SOURCE landing (authoritative "which quarter").
+run_config       = curated_cfg["run_config"]
+src_root         = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
+segment_src_root = f"{src_root}/{segment}"
+
+if run_config["run_mode"] == "historical":
+    year, quarter = run_config.get("year"), run_config.get("quarter")
+    if not year or not quarter:
+        raise ValueError("run_mode is 'historical' but 'year'/'quarter' not set in run_config")
+else:
+    year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
+    if not year or not quarter:
+        raise ValueError(f"No completed quarter found under {segment_src_root}")
+
+print(f"{segment}: env={env}  data_source={data_source}  year={year}  quarter={quarter}")
+
+# COMMAND ----------
+
+summary = curate_segment(
+    spark, dbutils, curated_cfg, env, segment, year, quarter,
+    data_source=data_source, starburst_config=starburst_config,
+)
+print(summary)

@@ -231,7 +231,8 @@ CREATE TABLE `pdm-pdm-gsc-bi-{env}`.`clinical_inventory`.`clinical_treatment_gro
   `visit_days` STRING,
   `dispensing_quantity` BIGINT,
   `dispensing_frequency_days` BIGINT,
-  `max_cycles` DOUBLE
+  `max_cycles` DOUBLE,
+  `do_not_ship_days` BIGINT
 )
 USING DELTA
 """)

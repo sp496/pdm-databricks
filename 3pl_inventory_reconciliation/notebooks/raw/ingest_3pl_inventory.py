@@ -107,7 +107,7 @@ for segment in segments:
     # ------------------------------------------------------------------
     # Load mapping file
     # ------------------------------------------------------------------
-    mapping_path = discover_mapping_file(dbutils, quarter_root)
+    mapping_path = discover_mapping_file(dbutils, quarter_root, segment)
     print(f"Mapping path: {mapping_path}")
     if not mapping_path:
         print(f"  No mapping file under {quarter_root}/mapping_files — skipping segment")

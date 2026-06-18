@@ -86,7 +86,7 @@ print(f"Raw quarter root : {raw_quarter_root}")
 # COMMAND ----------
 
 # Mapping Excel file — discovered from the landing zone (source bucket)
-mapping_path = discover_mapping_file(dbutils, src_quarter_root)
+mapping_path = discover_mapping_file(dbutils, src_quarter_root, segment)
 print(f"Discovered mapping file: {mapping_path}")
 
 if not mapping_path:

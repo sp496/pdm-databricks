@@ -11,7 +11,7 @@
 # MAGIC
 # MAGIC Run order: after `ingest_3pl_inventory` for the target quarter, in
 # MAGIC parallel with `write_mapping_tables`. Must complete before
-# MAGIC `curate_3pl_inventory` and the processed-layer reconciliation.
+# MAGIC `curate_commercial_inventory` and the processed-layer reconciliation.
 # MAGIC
 # MAGIC The clinical EBS snapshot is staged separately by the standalone
 # MAGIC `stage_clinical_inventory` notebook (quarterly cadence).

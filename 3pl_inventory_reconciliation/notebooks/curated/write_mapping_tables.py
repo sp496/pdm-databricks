@@ -157,7 +157,7 @@ for segment in segments:
     # Discover files
     # ------------------------------------------------------------------
     try:
-        mapping_path = discover_mapping_file(dbutils, src_quarter_root)
+        mapping_path = discover_mapping_file(dbutils, src_quarter_root, segment)
         print(f"  Mapping file: {mapping_path}")
 
         if not mapping_path:
