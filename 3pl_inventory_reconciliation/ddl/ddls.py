@@ -93,6 +93,39 @@ COMMENT '3PL inventory reconciliation — UOM and conversion factor mapping'
 # COMMAND ----------
 
 spark.sql(f"""
+CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`lot_mapping` (
+    `Plant_Number`     STRING,
+    `3PL_Part`         STRING,
+    `3PL_Lot_Number`   STRING,
+    `Gilead_Lot_Number` STRING,
+    `Comments`         STRING,
+    `Segment`          STRING,
+    `Year`             STRING,
+    `Quarter`          STRING
+)
+USING DELTA
+PARTITIONED BY (Segment, Year, Quarter)
+COMMENT '3PL inventory reconciliation — manual 3PL lot to Gilead lot mapping'
+""")
+
+# COMMAND ----------
+
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`facility_mapping` (
+    `Plant_Number` STRING,
+    `Facility`     STRING,
+    `Segment`      STRING,
+    `Year`         STRING,
+    `Quarter`      STRING
+)
+USING DELTA
+PARTITIONED BY (Segment, Year, Quarter)
+COMMENT '3PL inventory reconciliation — facility to plant number mapping (clinical almac)'
+""")
+
+# COMMAND ----------
+
+spark.sql(f"""
 CREATE TABLE IF NOT EXISTS `pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`sap_report` (
     `Company_Code`                                    STRING,
     `Name_of_Company_Code_or_Company`                 STRING,

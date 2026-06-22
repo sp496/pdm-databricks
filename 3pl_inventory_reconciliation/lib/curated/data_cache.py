@@ -29,6 +29,9 @@ class MappingFilePaths:
     # Optional Facility->Plant Number sheet (clinical only, e.g. almac files).
     # When the workbook lacks this sheet (commercial), the guarded load yields None.
     facility_mapping_sheet_name: Optional[str] = None
+    # Optional Lot Mapping sheet (manual 3PL lot -> Gilead lot override).
+    # Guarded like the facility sheet; absent/empty sheet is a harmless no-op.
+    lot_mapping_sheet_name: Optional[str] = None
 
 
 @dataclass
@@ -64,6 +67,7 @@ class MappingDataCache:
         self.sap_report_df = None
         self.uom_mapping_df = None
         self.facility_mapping_df = None   # Facility->Plant Number (clinical almac); None when absent
+        self.lot_mapping_df = None        # manual 3PL lot -> Gilead lot override; None when absent
         self.uom_master_df = None
         self.unit_cost_df = None
         self.material_type_df = None
@@ -237,6 +241,21 @@ def load_file_mappings(file_paths: MappingFilePaths) -> MappingDataCache:
         except Exception as e:
             print(f"\tNo Facility Mapping sheet — skipping ({e.__class__.__name__})")
             cache.facility_mapping_df = None
+
+    # Optional Lot Mapping sheet (manual 3PL lot -> Gilead lot override). Guarded:
+    # a header-only sheet yields a 0-row df (kept); an absent/columnless sheet
+    # raises and falls to None. Both are harmless no-ops in map_lot_no_wildcard.
+    if file_paths.lot_mapping_sheet_name:
+        try:
+            cache.lot_mapping_df = _load_sheet(
+                file_paths.mapping_file_path,
+                file_paths.lot_mapping_sheet_name,
+            )
+            cache.lot_mapping_df = cache.lot_mapping_df.dropna(subset=["3PL_Lot_Number"])
+            print(f"\tLoaded Lot Mapping ({len(cache.lot_mapping_df)} rows)")
+        except Exception as e:
+            print(f"\tNo Lot Mapping sheet — skipping ({e.__class__.__name__})")
+            cache.lot_mapping_df = None
 
     print("\tLoading SAP report...")
     if not file_paths.sap_report_file_path:

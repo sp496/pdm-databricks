@@ -63,6 +63,7 @@ FILE_PATHS = MappingFilePaths(
     header_mapping_sheet_name = "Header Mapping",
     item_mapping_sheet_name   = "Item Mapping",
     uom_mapping_sheet_name    = "UOM Mapping",
+    lot_mapping_sheet_name    = "Lot Mapping",
     sap_report_file_path      = os.path.join(_FIXTURES_DIR, "sap_report.csv"),
 )
 

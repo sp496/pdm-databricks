@@ -50,37 +50,37 @@ def get_clinical_inventory_query(inventory_orgs: Optional[Iterable[str]] = None,
                 moq.subinventory_code                 AS subinventory_code,
                 msi.inventory_item_id                 AS inventory_item_id,
                 msi.organization_id                   AS organization_id
-            FROM pdm.ebs_processed.apps_mtl_system_items_b msi
-            JOIN pdm.ebs_processed.apps_mtl_parameters mp
+            FROM ebs_processed.apps_mtl_system_items_b msi
+            JOIN ebs_processed.apps_mtl_parameters mp
                 ON msi.organization_id = mp.organization_id
-            JOIN pdm.ebs_processed.apps_mtl_onhand_quantities moq
+            JOIN ebs_processed.apps_mtl_onhand_quantities moq
                 ON msi.inventory_item_id = moq.inventory_item_id
                AND msi.organization_id   = moq.organization_id
-            LEFT JOIN pdm.ebs_processed.apps_mtl_lot_numbers mln
+            LEFT JOIN ebs_processed.apps_mtl_lot_numbers mln
                 ON moq.inventory_item_id = mln.inventory_item_id
                AND moq.organization_id   = mln.organization_id
                AND moq.lot_number        = mln.lot_number
-            LEFT JOIN pdm.ebs_processed.apps_mtl_material_statuses_tl mmst
+            LEFT JOIN ebs_processed.apps_mtl_material_statuses_tl mmst
                 ON moq.status_id = mmst.status_id
                AND mmst.language = 'US'
-            JOIN pdm.ebs_processed.apps_mtl_system_items_tl mtltl
+            JOIN ebs_processed.apps_mtl_system_items_tl mtltl
                 ON mtltl.inventory_item_id = msi.inventory_item_id
                AND mtltl.organization_id   = msi.organization_id
                AND mtltl.language          = 'US'
-            JOIN pdm.ebs_processed.apps_org_organization_definitions ood
+            JOIN ebs_processed.apps_org_organization_definitions ood
                 ON mp.organization_id = ood.organization_id
-            JOIN pdm.ebs_processed.apps_hr_operating_units hou
+            JOIN ebs_processed.apps_hr_operating_units hou
                 ON ood.operating_unit = hou.organization_id
-            JOIN pdm.ebs_processed.apps_xle_entity_profiles xep
+            JOIN ebs_processed.apps_xle_entity_profiles xep
                 ON CAST(hou.default_legal_context_id AS INTEGER) = xep.legal_entity_id
-            JOIN pdm.ebs_processed.apps_mtl_item_categories mic
+            JOIN ebs_processed.apps_mtl_item_categories mic
                 ON mic.inventory_item_id = msi.inventory_item_id
                AND mic.organization_id   = msi.organization_id
-            JOIN pdm.ebs_processed.apps_mtl_category_sets_tl mcs
+            JOIN ebs_processed.apps_mtl_category_sets_tl mcs
                 ON mcs.category_set_id   = mic.category_set_id
                AND mcs.category_set_name = 'Inventory'
                AND mcs.language          = 'US'
-            JOIN pdm.ebs_processed.apps_mtl_categories_vl mcv
+            JOIN ebs_processed.apps_mtl_categories_vl mcv
                 ON mcv.category_id = mic.category_id
             GROUP BY
                 hou.organization_id,
@@ -110,7 +110,7 @@ def get_clinical_inventory_query(inventory_orgs: Optional[Iterable[str]] = None,
                 mr.inventory_item_id,
                 mr.organization_id,
                 mr.lot_number
-            FROM pdm.ebs_processed.apps_mtl_reservations mr
+            FROM ebs_processed.apps_mtl_reservations mr
             GROUP BY mr.inventory_item_id, mr.organization_id, mr.lot_number
         )
         SELECT
@@ -162,23 +162,23 @@ def get_clinical_queries(data_source: str = "spark") -> Dict[str, str]:
             SELECT DISTINCT
                 mp.organization_code   AS plant_number,
                 ood.organization_name  AS plant_name
-            FROM pdm.ebs_processed.apps_mtl_parameters mp
-            JOIN pdm.ebs_processed.apps_org_organization_definitions ood
+            FROM ebs_processed.apps_mtl_parameters mp
+            JOIN ebs_processed.apps_org_organization_definitions ood
                 ON mp.organization_id = ood.organization_id
         """).strip(),
 
         'material_master': dedent("""
             SELECT DISTINCT
                 segment1 AS matnr
-            FROM pdm.ebs_processed.apps_mtl_system_items_b
+            FROM ebs_processed.apps_mtl_system_items_b
         """).strip(),
 
         'lot_no_master': dedent("""
             SELECT DISTINCT
                 msi.segment1   AS matnr,
                 mln.lot_number AS charg
-            FROM pdm.ebs_processed.apps_mtl_lot_numbers mln
-            JOIN pdm.ebs_processed.apps_mtl_system_items_b msi
+            FROM ebs_processed.apps_mtl_lot_numbers mln
+            JOIN ebs_processed.apps_mtl_system_items_b msi
                 ON mln.inventory_item_id = msi.inventory_item_id
                AND mln.organization_id   = msi.organization_id
         """).strip(),
@@ -188,8 +188,8 @@ def get_clinical_queries(data_source: str = "spark") -> Dict[str, str]:
                 mln.lot_number AS charg,
                 msi.segment1   AS matnr,
                 mln.c_attribute1 AS atwrt
-            FROM pdm.ebs_processed.apps_mtl_lot_numbers mln
-            JOIN pdm.ebs_processed.apps_mtl_system_items_b msi
+            FROM ebs_processed.apps_mtl_lot_numbers mln
+            JOIN ebs_processed.apps_mtl_system_items_b msi
                 ON mln.inventory_item_id = msi.inventory_item_id
                AND mln.organization_id   = msi.organization_id
             WHERE mln.lot_attribute_category IS NULL
@@ -201,8 +201,8 @@ def get_clinical_queries(data_source: str = "spark") -> Dict[str, str]:
                 muc.uom_code         AS alternate_uom,
                 msi.primary_uom_code AS gilead_uom,
                 muc.conversion_rate  AS conversion_factor
-            FROM pdm.ebs_processed.apps_mtl_uom_conversions muc
-            JOIN pdm.ebs_processed.apps_mtl_system_items_b msi
+            FROM ebs_processed.apps_mtl_uom_conversions muc
+            JOIN ebs_processed.apps_mtl_system_items_b msi
                 ON msi.inventory_item_id = muc.inventory_item_id
             WHERE msi.organization_id = 131
         """).strip(),
@@ -211,14 +211,14 @@ def get_clinical_queries(data_source: str = "spark") -> Dict[str, str]:
             SELECT DISTINCT
                 segment1    AS matnr,
                 description AS Material_Description
-            FROM pdm.ebs_processed.apps_mtl_system_items_b
+            FROM ebs_processed.apps_mtl_system_items_b
         """).strip(),
 
         'material_type': dedent("""
             SELECT DISTINCT
                 msi.segment1  AS matnr,
                 msi.item_type AS extwg
-            FROM pdm.ebs_processed.apps_mtl_system_items_b msi
+            FROM ebs_processed.apps_mtl_system_items_b msi
         """).strip(),
     }
 

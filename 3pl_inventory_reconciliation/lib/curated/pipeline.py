@@ -96,6 +96,8 @@ def curate_segment(spark, dbutils, curated_cfg: dict, env: str, segment: str,
         # Clinical almac workbook carries this; commercial workbooks don't —
         # the guarded load yields None when the sheet is absent.
         facility_mapping_sheet_name = "Facility Mapping",
+        # Manual 3PL lot -> Gilead lot override; guarded load (absent/empty = no-op).
+        lot_mapping_sheet_name      = "Lot Mapping",
     )
     ref_paths = build_ref_paths(segment, ref_base)
 

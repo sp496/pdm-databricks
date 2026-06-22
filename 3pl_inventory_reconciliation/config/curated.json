@@ -1,5 +1,7 @@
 {
   "ref_data_dir":      "3pl_inventory_reconciliation/raw/curation_mapping_files",
   "item_mapping_table":          "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`item_mapping`",
-  "uom_mapping_table":           "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`uom_mapping`"
+  "uom_mapping_table":           "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`uom_mapping`",
+  "lot_mapping_table":           "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`lot_mapping`",
+  "facility_mapping_table":      "`pdm-pdm-gsc-bi-{env}`.`3pl_inventory_recon`.`facility_mapping`"
 }

@@ -67,38 +67,39 @@ _OUTPUTS_DIR  = os.path.join(_TESTS_DIR, "outputs", "curated")
 
 YEAR    = "2026"
 QUARTER = "Q1"
-SEGMENT = "clinical"
-SITE_ID = 'Almac'   # must match folder name AND the 3PL column in the mapping Excel
+SEGMENT = "commercial"
+SITE_ID = '1321_1591_1698'   # must match folder name AND the 3PL column in the mapping Excel
 
 FILE_PATHS = MappingFilePaths(
-    mapping_file_path           = os.path.join(_FIXTURES_DIR, "3PL_clinical_mapping_2026_Q1.xlsx"),
+    mapping_file_path           = os.path.join(_FIXTURES_DIR, "3PL_commercial_mapping_2026_Q1.xlsx"),
     header_mapping_sheet_name   = "Header Mapping",
     item_mapping_sheet_name     = "Item Mapping",
     uom_mapping_sheet_name      = "UOM Mapping",
     facility_mapping_sheet_name = "Facility Mapping",
+    lot_mapping_sheet_name      = "Lot Mapping",
     sap_report_file_path        = os.path.join(_FIXTURES_DIR, "WRTRR1226 - Inventory Quantity - Q1 2026.csv"),
 )
 
-# REF_PATHS = RefFilePaths(
-#     plant_name_mapping_file_path   = os.path.join(_CURATED_DIR, "plant_name_mapping.csv"),
-#     material_master_file_path      = os.path.join(_CURATED_DIR, "material_master.csv"),
-#     lot_no_master_file_path        = os.path.join(_CURATED_DIR, "lot_no_master.csv"),
-#     lot_no_mapping_file_path       = os.path.join(_CURATED_DIR, "lot_no_mapping.csv"),
-#     material_description_file_path = os.path.join(_CURATED_DIR, "material_description.csv"),
-#     uom_master_file_path           = os.path.join(_CURATED_DIR, "uom_master.csv"),
-#     unit_cost_file_path            = os.path.join(_CURATED_DIR, "unit_cost.csv"),
-#     material_type_file_path        = os.path.join(_CURATED_DIR, "material_type.csv"),
-# )
-
 REF_PATHS = RefFilePaths(
-    plant_name_mapping_file_path   = os.path.join(_CURATED_DIR, "clinical_plant_name_mapping.csv"),
-    material_master_file_path      = os.path.join(_CURATED_DIR, "clinical_material_master.csv"),
-    lot_no_master_file_path        = os.path.join(_CURATED_DIR, "clinical_lot_no_master.csv"),
-    lot_no_mapping_file_path       = os.path.join(_CURATED_DIR, "clinical_lot_no_mapping.csv"),
-    material_description_file_path = os.path.join(_CURATED_DIR, "clinical_material_description.csv"),
-    uom_master_file_path           = os.path.join(_CURATED_DIR, "clinical_uom_master.csv"),
-    material_type_file_path        = os.path.join(_CURATED_DIR, "clinical_material_type.csv"),
+    plant_name_mapping_file_path   = os.path.join(_CURATED_DIR, "plant_name_mapping.csv"),
+    material_master_file_path      = os.path.join(_CURATED_DIR, "material_master.csv"),
+    lot_no_master_file_path        = os.path.join(_CURATED_DIR, "lot_no_master.csv"),
+    lot_no_mapping_file_path       = os.path.join(_CURATED_DIR, "lot_no_mapping.csv"),
+    material_description_file_path = os.path.join(_CURATED_DIR, "material_description.csv"),
+    uom_master_file_path           = os.path.join(_CURATED_DIR, "uom_master.csv"),
+    unit_cost_file_path            = os.path.join(_CURATED_DIR, "unit_cost.csv"),
+    material_type_file_path        = os.path.join(_CURATED_DIR, "material_type.csv"),
 )
+
+# REF_PATHS = RefFilePaths(
+#     plant_name_mapping_file_path   = os.path.join(_CURATED_DIR, "clinical_plant_name_mapping.csv"),
+#     material_master_file_path      = os.path.join(_CURATED_DIR, "clinical_material_master.csv"),
+#     lot_no_master_file_path        = os.path.join(_CURATED_DIR, "clinical_lot_no_master.csv"),
+#     lot_no_mapping_file_path       = os.path.join(_CURATED_DIR, "clinical_lot_no_mapping.csv"),
+#     material_description_file_path = os.path.join(_CURATED_DIR, "clinical_material_description.csv"),
+#     uom_master_file_path           = os.path.join(_CURATED_DIR, "clinical_uom_master.csv"),
+#     material_type_file_path        = os.path.join(_CURATED_DIR, "clinical_material_type.csv"),
+# )
 
 # Root of the raw fixture tree — CSVs live at:
 # {_RAW_SITE_DIR}/{sheet_slug}.csv

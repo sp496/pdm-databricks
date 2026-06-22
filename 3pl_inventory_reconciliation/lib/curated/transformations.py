@@ -391,7 +391,7 @@ def map_material_code(df: pd.DataFrame, item_mapping_df: pd.DataFrame, material_
 # ---------------------------------------------------------------------------
 
 def map_lot_no_wildcard(df: pd.DataFrame, lot_number_master_df: pd.DataFrame, lot_no_mapping_lookup: dict,
-                        sap_plant_df: pd.DataFrame = None) -> pd.DataFrame:
+                        sap_plant_df: pd.DataFrame = None, lot_mapping_df: pd.DataFrame = None) -> pd.DataFrame:
     # SAP batch membership per material, used to disambiguate wildcard matches
     # that resolve to more than one charg. None for clinical (no SAP report).
     sap_batches_by_material = {}
@@ -417,6 +417,24 @@ def map_lot_no_wildcard(df: pd.DataFrame, lot_number_master_df: pd.DataFrame, lo
         .str.split(".").str[-1]
         .str.strip()
     )
+
+    # Manual Lot Mapping override (sheet): explicit (Plant, 3PL Part, 3PL Lot) ->
+    # Gilead lot, matched on the RAW 3PL keys. Highest precedence, mirroring item
+    # mapping in map_material_code. Stashed in a scratch column that rides through
+    # the Pass-1 split/concat. None or an empty (header-only) sheet is a no-op.
+    df["_lot_override"] = np.nan
+    if lot_mapping_df is not None and not lot_mapping_df.empty:
+        lm = (
+            lot_mapping_df[["Plant_Number", "3PL_Part", "3PL_Lot_Number", "Gilead_Lot_Number"]]
+            .drop_duplicates(subset=["Plant_Number", "3PL_Part", "3PL_Lot_Number"], keep="first")
+        )
+        df = df.merge(
+            lm, how="left",
+            left_on=["3PL", "3PL_Material_Code", "3PL_Batch_Number"],
+            right_on=["Plant_Number", "3PL_Part", "3PL_Lot_Number"],
+        )
+        df["_lot_override"] = df["Gilead_Lot_Number"]
+        df = df.drop(columns=["Plant_Number", "3PL_Part", "3PL_Lot_Number", "Gilead_Lot_Number"])
 
     # Exact match against the lot master. Commercial (SAP) zero-pads charg, so
     # its query supplies charg_stripped (leading zeros removed) and we match the
@@ -483,11 +501,15 @@ def map_lot_no_wildcard(df: pd.DataFrame, lot_number_master_df: pd.DataFrame, lo
             wildcard_batch.at[idx] = in_sap[0] if in_sap else matches[0]
 
     # Precedence: our lookups override the file-provided value:
-    #   exact lot-master (charg) > wildcard mapping > file-provided.
+    #   manual Lot Mapping override > exact lot-master (charg) > wildcard mapping
+    #   > file-provided.
     df["Gilead_Batch_Number"] = (
-        df["charg"].combine_first(wildcard_batch).combine_first(df["_file_batch"])
+        df["_lot_override"]
+        .combine_first(df["charg"])
+        .combine_first(wildcard_batch)
+        .combine_first(df["_file_batch"])
     )
-    df = df.drop(columns=["matnr", "charg", "_file_batch", "_batch_lookup"])
+    df = df.drop(columns=["matnr", "charg", "_file_batch", "_batch_lookup", "_lot_override"])
     df = df.drop(columns=["charg_stripped"], errors="ignore")  # commercial only
 
     # ------------------------------------------------------------------
@@ -699,7 +721,8 @@ def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: 
     df = map_material_code(df, mapping_cache.item_mapping_df, mapping_cache.material_master_df)
 
     print("    Mapping lot numbers")
-    df = map_lot_no_wildcard(df, mapping_cache.lot_no_master_df, mapping_cache.lot_no_mapping_lookup, sap_plant_df)
+    df = map_lot_no_wildcard(df, mapping_cache.lot_no_master_df, mapping_cache.lot_no_mapping_lookup,
+                             sap_plant_df, mapping_cache.lot_mapping_df)
 
     # Multi-plant folders: resolve the real plant per row from SAP before the
     # remaining 3PL-keyed steps (UOM, cost) and 3PL_Name run.

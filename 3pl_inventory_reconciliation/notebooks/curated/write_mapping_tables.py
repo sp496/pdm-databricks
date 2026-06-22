@@ -59,6 +59,8 @@ run_mode     = run_config["run_mode"]
 header_mapping_table = curated_cfg["header_mapping_table"].format(env=env)
 item_mapping_table   = curated_cfg["item_mapping_table"].format(env=env)
 uom_mapping_table    = curated_cfg["uom_mapping_table"].format(env=env)
+lot_mapping_table    = curated_cfg["lot_mapping_table"].format(env=env)
+facility_mapping_table = curated_cfg["facility_mapping_table"].format(env=env)
 
 print(f"Segments : {segments}")
 print(f"Run mode : {run_mode}")
@@ -169,7 +171,9 @@ for segment in segments:
             mapping_file_path         = dbfs_path(mapping_path),
             header_mapping_sheet_name = "Header Mapping",
             item_mapping_sheet_name   = "Item Mapping",
-            uom_mapping_sheet_name    = "UOM Mapping",
+            uom_mapping_sheet_name      = "UOM Mapping",
+            lot_mapping_sheet_name      = "Lot Mapping",
+            facility_mapping_sheet_name = "Facility Mapping",
         )
 
         # File-only loader — no DataBackend / Starburst / Spark probing needed,
@@ -200,6 +204,12 @@ for segment in segments:
     _write_delta(cache.header_mapping_df, header_mapping_table, "header_mapping", segment, year, quarter)
     _write_delta(cache.item_mapping_df,   item_mapping_table,   "item_mapping",   segment, year, quarter)
     _write_delta(cache.uom_mapping_df,    uom_mapping_table,    "uom_mapping",    segment, year, quarter)
+    # Lot Mapping is optional — only write when the sheet was present in the workbook.
+    if cache.lot_mapping_df is not None:
+        _write_delta(cache.lot_mapping_df, lot_mapping_table, "lot_mapping", segment, year, quarter)
+    # Facility Mapping is optional (clinical almac only) — write when present.
+    if cache.facility_mapping_df is not None:
+        _write_delta(cache.facility_mapping_df, facility_mapping_table, "facility_mapping", segment, year, quarter)
 
 # COMMAND ----------
 
