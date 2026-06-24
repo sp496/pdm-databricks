@@ -300,8 +300,7 @@ class DataCurator:
             raise ValueError("site_depot_mapping_df must be provided to DataCurator for subject-visit assembly")
         site_depot_df = self.site_depot_mapping_df
 
-        visit_df = visit_df.copy()
-        visit_df['Visit Date'] = pd.to_datetime(visit_df['Visit Date'], dayfirst=True, errors='coerce')
+        visit_df = self.convert_date_columns(visit_df, ['Visit Date'])
 
         visit_cols = ['Subject Number', 'Visit', 'Visit Date', 'Unblinded Drug Description',
                       'Finished Lot', 'Expiration Date', 'Quantity Dispensed', 'Visit Dose',

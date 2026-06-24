@@ -33,7 +33,7 @@ import pandas as pd
 from lib.curated.transformations import remove_decimal_if_all_zeros
 from lib.curated.data_cache import load_sap_report_file
 from lib.discovery import (
-    get_latest_completed_quarter,
+    resolve_quarter_from_source,
     discover_3pl_files,
     discover_sap_file,
 )
@@ -68,20 +68,9 @@ raw_root = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}
 
 sap_report_table = curated_cfg["sap_report_table"].format(env=env)
 
-run_config = curated_cfg["run_config"]
-run_mode   = run_config["run_mode"]
-
 print(f"Source root      : {src_root}")
 print(f"Raw root         : {raw_root}")
 print(f"SAP report table : {sap_report_table}")
-print(f"Run mode         : {run_mode}")
-
-if run_mode == "historical":
-    hist_year    = run_config.get("year")
-    hist_quarter = run_config.get("quarter")
-    if not hist_year or not hist_quarter:
-        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
-    print(f"Historical load: year={hist_year}, quarter={hist_quarter}")
 
 # COMMAND ----------
 
@@ -123,19 +112,15 @@ print(f"\n{'='*60}")
 print(f"Segment: {segment_c}")
 print(f"{'='*60}")
 
-# Resolve year/quarter
-if run_mode == "historical":
-    year_c    = hist_year
-    quarter_c = hist_quarter
-    print(f"  Using historical: year={year_c}, quarter={quarter_c}")
-else:
-    year_c, quarter_c = get_latest_completed_quarter(dbutils, segment_src_root_c)
-    if not year_c or not quarter_c:
-        raise ValueError(
-            f"No completed quarter found under {segment_src_root_c} — "
-            f"run ingest_3pl_inventory for commercial before staging"
-        )
-    print(f"  Auto-detected latest completed quarter: year={year_c}, quarter={quarter_c}")
+# Resolve year/quarter per the segment's run_mode (historical | latest_completed | latest_available)
+run_mode, year_c, quarter_c = resolve_quarter_from_source(curated_cfg, segment_c, dbutils, segment_src_root_c)
+print(f"  Run mode: {run_mode}")
+if run_mode != "historical" and (not year_c or not quarter_c):
+    raise ValueError(
+        f"No completed quarter found under {segment_src_root_c} — "
+        f"run ingest_3pl_inventory for commercial before staging"
+    )
+print(f"  Resolved quarter: year={year_c}, quarter={quarter_c}")
 
 src_quarter_root_c = f"{segment_src_root_c}/{year_c}/{quarter_c}"
 raw_quarter_root_c = f"{segment_raw_root_c}/{year_c}/{quarter_c}"
@@ -172,6 +157,14 @@ pre_filter_rows = len(sap_df)
 if plant_numbers_c:
     sap_df = sap_df[sap_df["Plant"].isin(plant_numbers_c)]
 print(f"  SAP rows: {pre_filter_rows} total → {len(sap_df)} after plant filter")
+
+# Safety net: drop any fully-duplicate rows so an identical line in the source
+# file can't double-count when the reconciliation aggregates SAP per
+# (Plant, Material, Batch).
+pre_dedup_rows = len(sap_df)
+sap_df = sap_df.drop_duplicates()
+if len(sap_df) != pre_dedup_rows:
+    print(f"  Dropped {pre_dedup_rows - len(sap_df)} duplicate SAP row(s) → {len(sap_df)}")
 
 _write_delta(sap_df, sap_report_table, "sap_report", segment_c, year_c, quarter_c)
 

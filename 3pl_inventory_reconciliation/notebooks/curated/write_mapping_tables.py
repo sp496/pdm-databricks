@@ -53,8 +53,6 @@ resolved_env = "prod" if env == "prd" else env
 src_root     = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
 raw_root     = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
 segments     = curated_cfg["segments"]
-run_config   = curated_cfg["run_config"]
-run_mode     = run_config["run_mode"]
 
 header_mapping_table = curated_cfg["header_mapping_table"].format(env=env)
 item_mapping_table   = curated_cfg["item_mapping_table"].format(env=env)
@@ -63,14 +61,6 @@ lot_mapping_table    = curated_cfg["lot_mapping_table"].format(env=env)
 facility_mapping_table = curated_cfg["facility_mapping_table"].format(env=env)
 
 print(f"Segments : {segments}")
-print(f"Run mode : {run_mode}")
-
-if run_mode == "historical":
-    hist_year    = run_config.get("year")
-    hist_quarter = run_config.get("quarter")
-    if not hist_year or not hist_quarter:
-        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
-    print(f"Historical load: year={hist_year}, quarter={hist_quarter}")
 
 # COMMAND ----------
 
@@ -122,7 +112,7 @@ def _write_delta(df: pd.DataFrame, table: str, label: str, segment: str, year: s
 
 # COMMAND ----------
 
-from lib.discovery import get_latest_completed_quarter
+from lib.discovery import resolve_quarter_from_source
 
 all_errors = []
 
@@ -135,19 +125,16 @@ for segment in segments:
     raw_quarter_root_base = f"{raw_root}/{segment}"
 
     # ------------------------------------------------------------------
-    # Resolve year/quarter
+    # Resolve year/quarter per the segment's run_mode
+    # (historical | latest_completed | latest_available)
     # ------------------------------------------------------------------
-    if run_mode == "historical":
-        year    = hist_year
-        quarter = hist_quarter
-        print(f"  Using historical: year={year}, quarter={quarter}")
-    else:
-        year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
-        if not year or not quarter:
-            print(f"  No completed quarter found under {segment_src_root} — skipping segment")
-            all_errors.append((segment, "quarter detection", "No completed quarter found"))
-            continue
-        print(f"  Auto-detected latest completed quarter: year={year}, quarter={quarter}")
+    run_mode, year, quarter = resolve_quarter_from_source(curated_cfg, segment, dbutils, segment_src_root)
+    print(f"  Run mode: {run_mode}")
+    if run_mode != "historical" and (not year or not quarter):
+        print(f"  No completed quarter found under {segment_src_root} — skipping segment")
+        all_errors.append((segment, "quarter detection", "No completed quarter found"))
+        continue
+    print(f"  Resolved quarter: year={year}, quarter={quarter}")
 
     src_quarter_root = f"{segment_src_root}/{year}/{quarter}"
     raw_quarter_root = f"{raw_quarter_root_base}/{year}/{quarter}"

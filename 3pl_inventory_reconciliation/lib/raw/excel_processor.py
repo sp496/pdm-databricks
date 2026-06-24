@@ -16,7 +16,7 @@ def process_3pl_file(file_path, sheet_mapping):
     """
     if sheet_mapping is None:
         print(f"  Skipping {file_path} (site not found in mapping)")
-        return []
+        return {}
 
     print(f"  Reading {file_path}")
     xls = pd.ExcelFile(file_path)

@@ -1,6 +1,85 @@
 """Transformation functions for the 3PL processed (reconciliation) layer."""
 
+import numpy as np
 import pandas as pd
+
+
+# ---------------------------------------------------------------------------
+# Curated 3PL aggregation (shared by both reconciliation pipelines)
+# ---------------------------------------------------------------------------
+
+# The reconciliation grain — identical to the keys the curated side is joined on
+# against SAP/EBS. Aggregating to this grain makes the 3PL side symmetric with
+# the SAP/EBS groupby so a single SAP/EBS row can never fan out across multiple
+# curated rows.
+_CURATED_GRAIN = ["3PL", "Gilead_Material_Code", "Gilead_Batch_Number"]
+_CURATED_SUM   = ["3PL_Quantity", "3PL_Converted_Quantity"]
+# Raw / provenance columns that may differ across collapsed rows — keep the audit
+# trail by comma-joining the distinct values (the curated table still holds the
+# exact per-row detail for drill-down).
+_CURATED_JOIN  = ["3PL_Material_Code", "3PL_Batch_Number", "File_Name", "Validation_Remark"]
+
+
+def _join_distinct(s: pd.Series):
+    """Comma-join the distinct non-null values of a series, preserving order.
+
+    Returns NaN when the series has no non-null values, so an all-null column
+    stays null rather than becoming an empty string.
+    """
+    vals = [str(x) for x in s.dropna().unique()]
+    return ", ".join(dict.fromkeys(vals)) if vals else np.nan
+
+
+def aggregate_curated_3pl(curated_df: pd.DataFrame) -> pd.DataFrame:
+    """Collapse curated rows to the reconciliation grain.
+
+    Two curated rows whose raw 3PL batch numbers differ only in formatting
+    (e.g. "17412111V" and "17-412-111V") resolve to the same Gilead batch and
+    so are the same physical lot. SAP/EBS aggregate them to one row per
+    (plant, material, batch); the curated side must match or the single SAP/EBS
+    row fans out across both curated rows in the outer join. This runs per whole
+    partition (not per file), so it also collapses identical grains that
+    originate in different files/sheets.
+
+    Only rows with all three join keys present are aggregated; rows missing any
+    key (unmapped/error rows) pass through unchanged so they remain curated-only
+    in the outer join and keep their individual validation remarks.
+
+    Sums 3PL_Quantity and 3PL_Converted_Quantity; comma-joins distinct raw/
+    provenance values; OR-s Has_Error; takes the first of every other column
+    (invariant per grain).
+    """
+    # Coerce the quantity columns to numeric up front. If they arrive as strings
+    # (object dtype), a groupby "sum" would CONCATENATE them ("14992" + "260300"
+    # -> "14992260300") instead of adding, so the quantities would not be summed.
+    curated_df = curated_df.copy()
+    for c in _CURATED_SUM:
+        if c in curated_df.columns:
+            curated_df[c] = pd.to_numeric(curated_df[c], errors="coerce")
+
+    valid_mask = (
+        curated_df["3PL"].notna()
+        & curated_df["Gilead_Material_Code"].notna()
+        & curated_df["Gilead_Batch_Number"].notna()
+    )
+    valid   = curated_df[valid_mask]
+    invalid = curated_df[~valid_mask]
+    if valid.empty:
+        return curated_df
+
+    agg = {c: "sum" for c in _CURATED_SUM if c in valid.columns}
+    agg.update({c: _join_distinct for c in _CURATED_JOIN if c in valid.columns})
+    if "Has_Error" in valid.columns:
+        agg["Has_Error"] = "max"   # any True
+    for c in valid.columns:
+        if c not in _CURATED_GRAIN and c not in agg:
+            agg[c] = "first"       # 3PL_Name, *_UOM, Conversion_Factor, Cost,
+                                   # 3PL_Material_Type, Material_Description,
+                                   # Segment, Year, Quarter, Date_Processed …
+
+    grouped = valid.groupby(_CURATED_GRAIN, dropna=False, as_index=False).agg(agg)
+    out = pd.concat([grouped, invalid], ignore_index=True)
+    return out[curated_df.columns]   # preserve original column order
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +151,11 @@ def process_commercial(
     resolve_quarter before loading) and stamped onto the output directly.
     Returns a pandas DataFrame ready for Spark conversion in the notebook.
     """
+    # ----- Curated 3PL: collapse to the reconciliation grain -----
+    # Mirrors the SAP groupby below so a single SAP row can't fan out across
+    # multiple curated rows that resolved to the same Gilead batch.
+    curated_df = aggregate_curated_3pl(curated_df)
+
     # ----- SAP: select, aggregate -----
     # Stock_Quantity__Base_UOM_ and Group_Valuation_Standard_Cost are stored as
     # DOUBLE in the sap_report Delta table — no cast needed here
@@ -252,6 +336,11 @@ def process_clinical(
     Returns a pandas DataFrame with the columns defined in
     _CLINICAL_OUTPUT_COLUMNS — ready for Spark conversion in the notebook.
     """
+    # ----- Curated 3PL: collapse to the reconciliation grain -----
+    # Mirrors the EBS groupby below so a single EBS row can't fan out across
+    # multiple curated rows that resolved to the same Gilead batch.
+    curated_df = aggregate_curated_3pl(curated_df)
+
     # ----- EBS: select & aggregate across subinventories -----
     ebs_df = ebs_df[_EBS_INPUT_COLUMNS].copy()
 

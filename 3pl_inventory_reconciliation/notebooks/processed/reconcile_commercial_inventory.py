@@ -29,6 +29,7 @@ from pyspark.sql.functions import col, lit
 from pyspark.sql.types import StringType, DoubleType, BooleanType, IntegerType
 
 from lib.processed.transformations import process_commercial
+from lib.discovery import resolve_quarter_from_source
 from common.config_loader import load_config
 
 # COMMAND ----------
@@ -42,32 +43,21 @@ segment = "commercial"
 
 env           = dbutils.widgets.get("DATAENV")
 processed_cfg = load_config(os.path.join(project_root, "config/processed.json"))
-run_config    = processed_cfg["run_config"]
 
 curated_table        = processed_cfg["curated_table"].format(env=env)
 sap_report_table     = processed_cfg["sap_report_table"].format(env=env)
 header_mapping_table = processed_cfg["header_mapping_table"].format(env=env)
 target_table         = processed_cfg["reconciled_commercial_table"].format(env=env)
 
-# Resolve the target quarter — historical from config, else the latest present in
-# the curated table for this segment.
-if run_config["run_mode"] == "historical":
-    year, quarter = run_config.get("year"), run_config.get("quarter")
-    if not year or not quarter:
-        raise ValueError("run_mode is 'historical' but 'year'/'quarter' not set in run_config")
-else:
-    latest = (
-        spark.table(curated_table)
-        .filter(col("Segment") == segment)
-        .select("Year", "Quarter")
-        .distinct()
-        .orderBy(col("Year").desc(), col("Quarter").desc())
-        .limit(1)
-        .collect()
-    )
-    year, quarter = (latest[0]["Year"], latest[0]["Quarter"]) if latest else (None, None)
+# Resolve the target quarter from the SOURCE landing — same logic as the upstream
+# layers (historical | latest_completed | latest_available), so curate and
+# reconcile always target the identical quarter for this segment.
+resolved_env     = "prod" if env == "prd" else env
+src_root         = f"{processed_cfg['src_bkt_mount_point']}/{processed_cfg['src_data_dir'].format(env=resolved_env)}"
+segment_src_root = f"{src_root}/{segment}"
+run_mode, year, quarter = resolve_quarter_from_source(processed_cfg, segment, dbutils, segment_src_root)
 
-print(f"{segment}: env={env}  year={year}  quarter={quarter}")
+print(f"{segment}: env={env}  run_mode={run_mode}  year={year}  quarter={quarter}")
 
 # COMMAND ----------
 

@@ -25,7 +25,7 @@ sys.path.extend([project_root, repo_root])
 # COMMAND ----------
 
 from lib.curated.pipeline import curate_segment
-from lib.discovery import get_latest_completed_quarter
+from lib.discovery import resolve_quarter_from_source
 from common.config_loader import load_config
 
 # COMMAND ----------
@@ -53,20 +53,14 @@ if data_source == "starburst":
     }
 
 # Resolve the target quarter from the SOURCE landing (authoritative "which quarter").
-run_config       = curated_cfg["run_config"]
 src_root         = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
 segment_src_root = f"{src_root}/{segment}"
 
-if run_config["run_mode"] == "historical":
-    year, quarter = run_config.get("year"), run_config.get("quarter")
-    if not year or not quarter:
-        raise ValueError("run_mode is 'historical' but 'year'/'quarter' not set in run_config")
-else:
-    year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
-    if not year or not quarter:
-        raise ValueError(f"No completed quarter found under {segment_src_root}")
+run_mode, year, quarter = resolve_quarter_from_source(curated_cfg, segment, dbutils, segment_src_root)
+if run_mode != "historical" and (not year or not quarter):
+    raise ValueError(f"No completed quarter found under {segment_src_root}")
 
-print(f"{segment}: env={env}  data_source={data_source}  year={year}  quarter={quarter}")
+print(f"{segment}: env={env}  data_source={data_source}  run_mode={run_mode}  year={year}  quarter={quarter}")
 
 # COMMAND ----------
 

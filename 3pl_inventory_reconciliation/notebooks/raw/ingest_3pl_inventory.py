@@ -19,7 +19,7 @@ sys.path.extend([project_root, repo_root])
 # COMMAND ----------
 
 from lib.discovery import (
-    get_latest_completed_quarter,
+    resolve_quarter_from_source,
     discover_3pl_files,
     discover_mapping_file,
 )
@@ -48,22 +48,12 @@ data_bkt_mount_point = config["data_bkt_mount_point"]
 src_data_dir         = config["src_data_dir"].format(env=resolved_env)
 raw_data_dir         = config["raw_data_dir"]
 segments          = config["segments"]
-run_config        = config["run_config"]
-run_mode          = run_config["run_mode"]
 header_sheet_name = "Header Mapping"
 
 src_root = f"{src_bkt_mount_point}/{src_data_dir}"
 tgt_root = f"{data_bkt_mount_point}/{raw_data_dir}"
 print(f"Source root : {src_root}")
 print(f"Target root : {tgt_root}")
-print(f"Run mode    : {run_mode}")
-
-if run_mode == "historical":
-    year    = run_config.get("year")
-    quarter = run_config.get("quarter")
-    if not year or not quarter:
-        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
-    print(f"Historical load: year={year}, quarter={quarter}")
 
 # COMMAND ----------
 
@@ -80,16 +70,15 @@ for segment in segments:
     segment_src_root = f"{src_root}/{segment}"
 
     # ------------------------------------------------------------------
-    # Resolve quarter to process
+    # Resolve quarter to process per the segment's run_mode
+    # (historical | latest_completed | latest_available)
     # ------------------------------------------------------------------
-    if run_mode == "historical":
-        print(f"  Using historical: year={year}, quarter={quarter}")
-    else:
-        year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
-        if not year or not quarter:
-            print(f"  No completed quarter found under {segment_src_root} — skipping segment")
-            continue
-        print(f"  Using latest completed quarter: year={year}, quarter={quarter}")
+    run_mode, year, quarter = resolve_quarter_from_source(config, segment, dbutils, segment_src_root)
+    print(f"  Run mode: {run_mode}")
+    if run_mode != "historical" and (not year or not quarter):
+        print(f"  No completed quarter found under {segment_src_root} — skipping segment")
+        continue
+    print(f"  Resolved quarter: year={year}, quarter={quarter}")
 
     quarter_root        = f"{segment_src_root}/{year}/{quarter}"
     target_quarter_root = f"{tgt_root}/{segment}/{year}/{quarter}"
@@ -130,6 +119,11 @@ for segment in segments:
         print(f"\n  Processing {site_id}")
         try:
             sheets = process_3pl_file(dbfs_path(src_path), site_sheet_mapping.get(site_id))
+            if not sheets:
+                # No mapped sheets (e.g. site not in the Header Mapping) — skip
+                # cleanly without creating an empty 3pl_files/{site_id}/ folder.
+                print(f"    Skipped {site_id} (no mapped sheets)")
+                continue
             dbutils.fs.mkdirs(f"dbfs:{out_dir}")
             for sheet_slug, data in sheets.items():
                 out_path = dbfs_path(f"{out_dir}/{sheet_slug}.csv")

@@ -23,7 +23,7 @@ sys.path.extend([project_root, repo_root])
 # COMMAND ----------
 
 from lib.curated.data_cache import MappingFilePaths, RefFilePaths, load_mapping_files, load_file_mappings
-from lib.discovery import discover_mapping_file, discover_sap_file, get_latest_completed_quarter
+from lib.discovery import discover_mapping_file, discover_sap_file, resolve_quarter_from_source
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
 
@@ -55,23 +55,13 @@ resolved_env     = "prod" if env == "prd" else env
 src_root         = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].format(env=resolved_env)}"
 raw_root         = f"{curated_cfg['data_bkt_mount_point']}/{curated_cfg['raw_data_dir']}"
 segment_src_root = f"{src_root}/{segment}"
-run_config = curated_cfg["run_config"]
-run_mode   = run_config["run_mode"]
 
+# Resolve year/quarter per the segment's run_mode (historical | latest_completed | latest_available)
+run_mode, year, quarter = resolve_quarter_from_source(curated_cfg, segment, dbutils, segment_src_root)
 print(f"Run mode : {run_mode}")
-
-# Resolve year/quarter
-if run_mode == "historical":
-    year    = run_config.get("year")
-    quarter = run_config.get("quarter")
-    if not year or not quarter:
-        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
-    print(f"Historical load: year={year}, quarter={quarter}")
-else:
-    year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
-    if not year or not quarter:
-        raise RuntimeError(f"No completed quarter found under {segment_src_root}")
-    print(f"Auto-detected latest completed quarter: year={year}, quarter={quarter}")
+if run_mode != "historical" and (not year or not quarter):
+    raise RuntimeError(f"No completed quarter found under {segment_src_root}")
+print(f"Resolved quarter: year={year}, quarter={quarter}")
 
 src_quarter_root = f"{segment_src_root}/{year}/{quarter}"
 raw_quarter_root = f"{raw_root}/{segment}/{year}/{quarter}"

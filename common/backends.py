@@ -83,6 +83,29 @@ class DataBackend:
         except Exception as e:
             print(f"\tWarning: Could not establish Starburst connection: {e}")
 
+    @staticmethod
+    def _cast_temporal_to_string(spark_df):
+        """Cast every timestamp/date column to string in Spark.
+
+        Source systems (notably Oracle EBS) use sentinel dates such as
+        4712-12-31 that sit far beyond pandas' nanosecond Timestamp range
+        (max ~2262-04-11). Letting toPandas() convert those via Arrow fails with
+        an "out of bounds timestamp" error. Casting to string in Spark first
+        sidesteps the conversion entirely — and is behaviour-preserving, since
+        _run_query stringifies the whole frame (.astype(str)) anyway.
+        """
+        from pyspark.sql import types as T
+        from pyspark.sql.functions import col
+
+        temporal_types = (T.TimestampType, T.DateType)
+        if hasattr(T, "TimestampNTZType"):  # Spark 3.4+
+            temporal_types = temporal_types + (T.TimestampNTZType,)
+
+        for field in spark_df.schema.fields:
+            if isinstance(field.dataType, temporal_types):
+                spark_df = spark_df.withColumn(field.name, col(field.name).cast("string"))
+        return spark_df
+
     def _run_query(self, query: str) -> pd.DataFrame:
         if self.data_source == "starburst":
             url = f"{self._base_url}/{self._default_catalog}/{self._default_schema}"
@@ -95,9 +118,12 @@ class DataBackend:
             spark_df = self._spark.read.jdbc(url=url, table=f"(\n{query}\n) AS tmp", properties=self._properties)
             if spark_df.isEmpty():
                 raise Exception("Query returned no results")
-            return spark_df.toPandas().astype(str)
         else:
-            return self._spark.sql(query).toPandas().astype(str)
+            spark_df = self._spark.sql(query)
+
+        # Cast temporal columns to string before toPandas (see helper docstring).
+        spark_df = self._cast_temporal_to_string(spark_df)
+        return spark_df.toPandas().astype(str)
 
     def run_query(self, data_name: str, query: str) -> pd.DataFrame:
         """Execute a query against the live backend and return a pandas DataFrame.

@@ -68,12 +68,12 @@ LOCAL_MAPPING = {
 # If subject_visit is set, subject is treated as the Subject Summary and assembly
 # is performed before processing; otherwise subject is processed as a single file.
 LOCAL_CSV = {
-    "subject":       r"../fixtures/sample_csvs/AFFIRM CB8025-41837_UNBLINDED Subject SummaryUNBLINDED Subject Summary2026-06-05-10-11-11.xlsx",
-    "depot":         r"../fixtures/sample_csvs/AFFIRM CB8025-41837_UNBLINDED Inventory LevelsDepot2026-06-05-10-12-15.xlsx",
-    "site":          r"../fixtures/sample_csvs/AFFIRM CB8025-41837_UNBLINDED Inventory LevelsSite2026-06-05-10-13-18.xlsx",
+    "subject":       r"../fixtures/sample_csvs/AFFIRM CB8025-41837_UNBLINDED Subject SummaryUNBLINDED Subject Summary2026-06-23-14-04-14.xlsx",
+    "depot":         r"../fixtures/sample_csvs/AFFIRM CB8025-41837_UNBLINDED Inventory LevelsDepot2026-06-23-14-05-13.xlsx",
+    "site":          r"../fixtures/sample_csvs/AFFIRM CB8025-41837_UNBLINDED Inventory LevelsSite2026-06-23-14-06-15.xlsx",
     "slsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
     "clsm":          None,#r"../fixtures/sample_csvs/AFFIRM CB8025-41837_InventoryLevelsDepot2026-05-06-15-33-02.xlsx",
-    "subject_visit": "../fixtures/sample_csvs/AFFIRM CB8025-41837_UNBLINDED Subject Visit SummaryUNBLINDED Subject Visit Summary2026-06-05-10-09-52.xlsx",
+    "subject_visit": "../fixtures/sample_csvs/AFFIRM CB8025-41837_UNBLINDED Subject Visit SummaryUNBLINDED Subject Visit Summary2026-06-23-14-07-43.xlsx",
 }
 
 # Date folder string — the extract date stamped on the source files

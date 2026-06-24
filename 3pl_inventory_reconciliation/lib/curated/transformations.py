@@ -323,27 +323,6 @@ def map_3pl_df(df: pd.DataFrame, site_id: str, file_stem: str, header_mapping: d
 
 
 # ---------------------------------------------------------------------------
-# Quantity aggregation
-# ---------------------------------------------------------------------------
-
-def aggregate_quantities(df: pd.DataFrame) -> pd.DataFrame:
-    group_cols = [c for c in df.columns if c != "3PL_Quantity"]
-
-    # A row is valid for aggregation when the 3PL is known and at least one of
-    # the 3PL/Gilead variants is populated for both material and batch.
-    valid_mask = (
-        df["3PL"].notna()
-        & (df["3PL_Material_Code"].notna() | df["Gilead_Material_Code"].notna())
-        & (df["3PL_Batch_Number"].notna()  | df["Gilead_Batch_Number"].notna())
-    )
-    valid   = df[valid_mask]
-    invalid = df[~valid_mask]
-
-    grouped = valid.groupby(group_cols, dropna=False, as_index=False)["3PL_Quantity"].sum()
-    return pd.concat([grouped, invalid], ignore_index=True)
-
-
-# ---------------------------------------------------------------------------
 # Material code mapping
 # ---------------------------------------------------------------------------
 
@@ -699,9 +678,6 @@ def curated_processing(raw_df: pd.DataFrame, raw_file_path: str, mapping_cache: 
 
     print("    Adding metadata")
     df = add_metadata(df, raw_file_path)
-
-    print("    Aggregating quantities")
-    df = aggregate_quantities(df)
 
     df["Has_Error"] = False
     df["Validation_Remark"] = None

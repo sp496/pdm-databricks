@@ -34,7 +34,7 @@ sys.path.extend([project_root, repo_root])
 import pandas as pd
 
 from lib.curated.queries import get_clinical_inventory_query
-from lib.discovery import get_latest_completed_quarter
+from lib.discovery import resolve_quarter_from_source
 from common.backends import DataBackend
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
@@ -66,19 +66,8 @@ src_root = f"{curated_cfg['src_bkt_mount_point']}/{curated_cfg['src_data_dir'].f
 
 ebs_clinical_inventory_table = curated_cfg["ebs_clinical_inventory_table"].format(env=env)
 
-run_config = curated_cfg["run_config"]
-run_mode   = run_config["run_mode"]
-
 print(f"Source root                 : {src_root}")
 print(f"EBS clinical inventory table: {ebs_clinical_inventory_table}")
-print(f"Run mode                    : {run_mode}")
-
-if run_mode == "historical":
-    hist_year    = run_config.get("year")
-    hist_quarter = run_config.get("quarter")
-    if not hist_year or not hist_quarter:
-        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
-    print(f"Historical load: year={hist_year}, quarter={hist_quarter}")
 
 # COMMAND ----------
 
@@ -111,19 +100,16 @@ print(f"\n{'='*60}")
 print(f"Segment: {segment_l}  (all orgs — no plant filter)")
 print(f"{'='*60}")
 
-# Resolve year/quarter from the SOURCE landing (partition stamp only)
-if run_mode == "historical":
-    year_l    = hist_year
-    quarter_l = hist_quarter
-    print(f"  Using historical: year={year_l}, quarter={quarter_l}")
-else:
-    year_l, quarter_l = get_latest_completed_quarter(dbutils, segment_src_root_l)
-    if not year_l or not quarter_l:
-        raise ValueError(
-            f"No completed quarter found under {segment_src_root_l} — "
-            f"ensure clinical source files are landed before staging"
-        )
-    print(f"  Auto-detected latest completed quarter: year={year_l}, quarter={quarter_l}")
+# Resolve year/quarter from the SOURCE landing per the segment's run_mode
+# (historical | latest_completed | latest_available)
+run_mode, year_l, quarter_l = resolve_quarter_from_source(curated_cfg, segment_l, dbutils, segment_src_root_l)
+print(f"  Run mode: {run_mode}")
+if run_mode != "historical" and (not year_l or not quarter_l):
+    raise ValueError(
+        f"No completed quarter found under {segment_src_root_l} — "
+        f"ensure clinical source files are landed before staging"
+    )
+print(f"  Resolved quarter: year={year_l}, quarter={quarter_l}")
 
 # Run EBS query with NO org filter — inventory_orgs=None returns all orgs.
 backend = DataBackend(data_source=data_source, starburst_config=starburst_config)

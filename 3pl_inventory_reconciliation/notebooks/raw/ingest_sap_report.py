@@ -18,7 +18,7 @@ sys.path.extend([project_root, repo_root])
 
 # COMMAND ----------
 
-from lib.discovery import get_latest_completed_quarter, discover_sap_file
+from lib.discovery import resolve_quarter_from_source, discover_sap_file
 from lib.raw.excel_processor import process_sap_file
 from common.config_loader import load_config
 from common.dbfs_utils import dbfs_path
@@ -42,20 +42,11 @@ src_bkt_mount_point  = config["src_bkt_mount_point"]
 data_bkt_mount_point = config["data_bkt_mount_point"]
 src_data_dir         = config["src_data_dir"].format(env=resolved_env)
 raw_data_dir         = config["raw_data_dir"]
-run_config = config["run_config"]
-run_mode   = run_config["run_mode"]
 
 src_root = f"{src_bkt_mount_point}/{src_data_dir}"
 tgt_root = f"{data_bkt_mount_point}/{raw_data_dir}"
 print(f"Source root : {src_root}")
 print(f"Target root : {tgt_root}")
-print(f"Run mode    : {run_mode}")
-
-if run_mode == "historical":
-    year    = run_config.get("year")
-    quarter = run_config.get("quarter")
-    if not year or not quarter:
-        raise ValueError("run_mode is 'historical' but 'year' and/or 'quarter' not set in run_config")
 
 # SAP report is commercial-only
 segment             = "commercial"
@@ -68,13 +59,11 @@ segment_src_root    = f"{src_root}/{segment}"
 
 # COMMAND ----------
 
-if run_mode == "historical":
-    print(f"Using historical: year={year}, quarter={quarter}")
-else:
-    year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
-    if not year or not quarter:
-        raise RuntimeError(f"No completed quarter found under {segment_src_root}")
-    print(f"Using latest completed quarter: year={year}, quarter={quarter}")
+run_mode, year, quarter = resolve_quarter_from_source(config, segment, dbutils, segment_src_root)
+print(f"Run mode    : {run_mode}")
+if run_mode != "historical" and (not year or not quarter):
+    raise RuntimeError(f"No completed quarter found under {segment_src_root}")
+print(f"Using year={year}, quarter={quarter}")
 
 quarter_root = f"{segment_src_root}/{year}/{quarter}"
 sap_out_dir  = f"{tgt_root}/{segment}/{year}/{quarter}/sap_report_files"

@@ -60,6 +60,95 @@ def get_latest_completed_quarter(dbutils, segment_root, today=None):
     return None, None
 
 
+def get_latest_available_quarter(dbutils, segment_root):
+    """Return (year_str, quarter_str) for the most recent quarter folder present
+    under segment_root, regardless of whether the quarter has completed.
+
+    Mirrors get_latest_completed_quarter but skips the is_quarter_complete check —
+    use this to target the newest quarter that exists even if it is still in
+    progress. Years are 4-digit folders; quarters are Q1..Q4.
+    """
+    year_dirs = sorted(
+        [
+            int(PurePath(d.path).name)
+            for d in dbutils.fs.ls(segment_root)
+            if PurePath(d.path).name.isdigit() and len(PurePath(d.path).name) == 4
+        ],
+        reverse=True,
+    )
+    if not year_dirs:
+        return None, None
+
+    for year in year_dirs:
+        year_path = os.path.join(segment_root, str(year))
+        quarter_dirs = sorted(
+            [
+                PurePath(d.path).name
+                for d in dbutils.fs.ls(year_path)
+                if re.fullmatch(r"Q[1-4]", PurePath(d.path).name)
+            ],
+            key=lambda q: int(q[1:]),
+            reverse=True,
+        )
+        if quarter_dirs:
+            return str(year), quarter_dirs[0]
+    return None, None
+
+
+def get_segment_run_config(cfg, segment):
+    """Resolve (run_mode, year, quarter) for one segment from the per-segment
+    run_config block.
+
+    run_config is keyed by segment:
+        {"commercial": {"run_mode": "latest_completed", "year": null, "quarter": null},
+         "clinical":   {"run_mode": "historical", "year": "2026", "quarter": "Q1"}}
+
+    A legacy flat {"run_mode": ...} object (no segment keys) is accepted for
+    backward compatibility and applies to every segment. Raises if the segment is
+    missing, or if historical mode lacks year/quarter.
+    """
+    rc_all = cfg["run_config"]
+    rc = rc_all if "run_mode" in rc_all else rc_all.get(segment)  # flat = legacy
+    if rc is None:
+        raise KeyError(
+            f"run_config has no entry for segment '{segment}' (have: {sorted(rc_all)})"
+        )
+    run_mode = rc["run_mode"]
+    year, quarter = rc.get("year"), rc.get("quarter")
+    if run_mode == "historical" and (not year or not quarter):
+        raise ValueError(
+            f"run_mode is 'historical' for segment '{segment}' but year/quarter not set"
+        )
+    return run_mode, year, quarter
+
+
+def resolve_quarter_from_source(cfg, segment, dbutils, segment_src_root):
+    """Resolve (run_mode, year, quarter) for a segment, reading the source folders
+    for the non-historical modes.
+
+    Modes (per-segment run_config):
+      historical       -> use the configured year/quarter
+      latest_completed -> most recent calendar-complete quarter present
+      latest_available -> most recent quarter folder present (may be in progress)
+
+    For the latest_* modes year/quarter may come back None when no folder is
+    found; the caller keeps its own not-found handling.
+    """
+    run_mode, year, quarter = get_segment_run_config(cfg, segment)
+    if run_mode == "historical":
+        return run_mode, year, quarter
+    if run_mode == "latest_completed":
+        year, quarter = get_latest_completed_quarter(dbutils, segment_src_root)
+    elif run_mode == "latest_available":
+        year, quarter = get_latest_available_quarter(dbutils, segment_src_root)
+    else:
+        raise ValueError(
+            f"Unknown run_mode '{run_mode}' for segment '{segment}' "
+            f"(expected historical | latest_completed | latest_available)"
+        )
+    return run_mode, year, quarter
+
+
 def latest_file_in_dir(dbutils, folder_path):
     """Return path of the file with the latest modificationTime in folder_path.
 
